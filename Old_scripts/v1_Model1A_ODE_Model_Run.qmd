@@ -1,0 +1,370 @@
+---
+title: "Model 1A ODE Run"
+format:
+  html:
+    toc: true
+    code-fold: false
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## 1) Setup
+
+```{r}
+rm(list = ls())
+
+library(tidyverse)
+library(deSolve)
+library(scales)
+
+options(scipen = 1000)
+
+dir.create("Outputs", showWarnings = FALSE, recursive = TRUE)
+
+source("Scripts/Model1A_ODE_Functions.R")
+source("Scripts/Model1A_ODE_Parameters.R")
+```
+
+## 2) Model settings
+
+```{r}
+model.time <- 365 * 6
+time.step <- 1
+burn_in_days <- 365
+mod.t <- seq(0, model.time, by = time.step)
+```
+
+## 3) Initial conditions
+
+```{r}
+S0 <- 620
+C0 <- 15
+I0 <- 5
+X0 <- 0
+
+mod.init <- c(S = S0, C = C0, I = I0, X = X0)
+```
+
+## 4) Utility functions
+
+```{r}
+run_scenario <- function(parms) {
+  as.data.frame(ode(y = mod.init, times = mod.t, func = Model1A_ODE, parms = parms))
+}
+
+apply_burn_in <- function(df, burn_days = 365) {
+  df %>% filter(time > burn_days) %>% mutate(time = time - burn_days)
+}
+
+add_derived_outputs <- function(df) {
+  df %>%
+    mutate(year = if_else(time == 0, 1, ((time - 1) %/% 365) + 1)) %>%
+    relocate(year, .before = time) %>%
+    mutate(
+      flow_dis_total = flow_dis_S + flow_dis_C + flow_dis_I + flow_dis_X,
+      flow_death_total = flow_death_S + flow_death_C + flow_death_I + flow_death_X
+    ) %>%
+    group_by(year) %>%
+    mutate(
+      cum_total_cases = cumsum(total_cases),
+      cum_identified_cases = cumsum(identified_cases),
+      cum_missed_cases = cumsum(missed_cases),
+      cum_missed_untested = cumsum(missed_untested),
+      cum_missed_false_negative = cumsum(missed_false_negative),
+      cum_side_room_patient_days = cumsum(side_room_patient_days),
+      cum_S_to_C = cumsum(flow_S_to_C),
+      cum_C_to_I = cumsum(flow_C_to_I),
+      cum_I_to_X = cumsum(flow_I_to_X),
+      cum_X_to_S = cumsum(flow_X_to_S),
+      cum_X_to_I = cumsum(flow_X_to_I),
+      cum_dis_total = cumsum(flow_dis_total),
+      cum_death_total = cumsum(flow_death_total)
+    ) %>%
+    ungroup()
+}
+
+negative_value_rows <- function(df) {
+  df %>% filter(if_any(where(is.numeric), ~ .x < 0))
+}
+
+negative_value_summary <- function(df) {
+  df %>%
+    summarise(across(where(is.numeric), ~ sum(.x < 0, na.rm = TRUE))) %>%
+    pivot_longer(cols = everything(), names_to = "variable", values_to = "num_negative_values") %>%
+    filter(num_negative_values > 0)
+}
+
+find_stabilisation_day <- function(df, states, tol = 1e-4, consecutive_days = 30) {
+  stopifnot(all(states %in% names(df)))
+
+  x <- df %>% arrange(time) %>% select(time, all_of(states))
+  d <- x %>% mutate(across(all_of(states), ~ abs(.x - lag(.x))))
+  stable_flag <- d %>%
+    mutate(stable = if_all(all_of(states), ~ !is.na(.x) & .x <= tol)) %>%
+    pull(stable)
+
+  r <- rle(stable_flag)
+  ends <- cumsum(r$lengths)
+  starts <- ends - r$lengths + 1
+  idx <- which(r$values & r$lengths >= consecutive_days)[1]
+
+  if (is.na(idx)) return(NA_real_)
+  x$time[starts[idx]]
+}
+
+stabilisation_summary <- function(df, scenario_label,
+                                  state_vars = c("S","C","I","X"),
+                                  flow_vars = c("flow_S_to_C","flow_C_to_I","flow_I_to_X","flow_X_to_S","flow_X_to_I",
+                                                "total_cases","identified_cases","missed_cases","missed_untested","missed_false_negative"),
+                                  tol = 1e-4, consecutive_days = 30) {
+  t_star <- find_stabilisation_day(df, state_vars, tol = tol, consecutive_days = consecutive_days)
+
+  if (is.na(t_star)) {
+    return(tibble(
+      scenario = scenario_label,
+      stabilisation_day = NA_real_,
+      tolerance = tol,
+      consecutive_days = consecutive_days,
+      stabilised = FALSE
+    ))
+  }
+
+  row_star <- df %>%
+    filter(time == t_star) %>%
+    slice(1) %>%
+    select(all_of(c(state_vars, flow_vars)))
+
+  tibble(
+    scenario = scenario_label,
+    stabilisation_day = t_star,
+    tolerance = tol,
+    consecutive_days = consecutive_days,
+    stabilised = TRUE
+  ) %>% bind_cols(row_star)
+}
+```
+
+## 5) Run scenarios
+
+```{r}
+scenario_parms <- list(
+  S1_base = mod.parms.S1,
+  S2_lowSe_highSp = mod.parms.S2,
+  S3_highSe_lowSp = mod.parms.S3,
+  S4_lowSe_lowSp = mod.parms.S4
+)
+
+scenario_raw <- lapply(scenario_parms, run_scenario)
+scenario_abso <- lapply(scenario_raw, function(x) x %>% apply_burn_in(burn_in_days) %>% add_derived_outputs())
+
+walk2(scenario_abso, names(scenario_abso), ~ write_csv(.x, paste0("Outputs/solution_", .y, ".csv")))
+```
+
+## 6) Annual summary tables
+
+```{r}
+make_annual_summary <- function(df, scenario_label) {
+  df %>%
+    filter(time %% 365 == 0 & time != 0) %>%
+    mutate(year_after_burnin = time / 365) %>%
+    transmute(
+      scenario = scenario_label,
+      year_after_burnin,
+      S, C, I, X,
+      cum_total_cases,
+      cum_identified_cases,
+      cum_missed_cases,
+      cum_missed_untested,
+      cum_missed_false_negative,
+      missed_share_untested = if_else(cum_missed_cases > 0, cum_missed_untested / cum_missed_cases, NA_real_),
+      missed_share_falseneg = if_else(cum_missed_cases > 0, cum_missed_false_negative / cum_missed_cases, NA_real_),
+      cum_side_room_patient_days
+    )
+}
+
+annual_summary_all <- bind_rows(
+  make_annual_summary(scenario_abso$S1_base, "S1_base"),
+  make_annual_summary(scenario_abso$S2_lowSe_highSp, "S2_lowSe_highSp"),
+  make_annual_summary(scenario_abso$S3_highSe_lowSp, "S3_highSe_lowSp"),
+  make_annual_summary(scenario_abso$S4_lowSe_lowSp, "S4_lowSe_lowSp")
+)
+
+write_csv(annual_summary_all, "Outputs/annual_summary_all.csv")
+knitr::kable(annual_summary_all, caption = "Annual summary (post burn-in)")
+```
+
+## 7) Stabilisation summary (states + flows)
+
+```{r}
+stability_all <- bind_rows(
+  stabilisation_summary(scenario_abso$S1_base, "S1_base"),
+  stabilisation_summary(scenario_abso$S2_lowSe_highSp, "S2_lowSe_highSp"),
+  stabilisation_summary(scenario_abso$S3_highSe_lowSp, "S3_highSe_lowSp"),
+  stabilisation_summary(scenario_abso$S4_lowSe_lowSp, "S4_lowSe_lowSp")
+)
+
+write_csv(stability_all, "Outputs/stabilisation_summary_states_flows.csv")
+knitr::kable(stability_all, caption = "Stabilisation: model states and flows")
+```
+
+## 8) Negative values checks
+
+```{r}
+neg_tables <- lapply(scenario_abso, negative_value_rows)
+neg_summaries <- lapply(scenario_abso, negative_value_summary)
+
+walk2(neg_tables, names(neg_tables), ~ write_csv(.x, paste0("Outputs/negative_rows_", .y, ".csv")))
+walk2(neg_summaries, names(neg_summaries), ~ write_csv(.x, paste0("Outputs/negative_summary_", .y, ".csv")))
+```
+
+## 9) Final cumulative outcomes table
+
+```{r}
+final_outcomes <- bind_rows(lapply(names(scenario_abso), function(nm) {
+  d <- scenario_abso[[nm]]
+  last <- d %>% filter(time == max(time)) %>% slice(1)
+
+  tibble(
+    scenario = nm,
+    final_S = last$S,
+    final_C = last$C,
+    final_I = last$I,
+    final_X = last$X,
+    cum_total_cases = last$cum_total_cases,
+    cum_identified_cases = last$cum_identified_cases,
+    cum_missed_cases = last$cum_missed_cases,
+    cum_missed_untested = last$cum_missed_untested,
+    cum_missed_false_negative = last$cum_missed_false_negative,
+    cum_side_room_patient_days = last$cum_side_room_patient_days
+  )
+}))
+
+# Incrementals vs base S1
+base_row <- final_outcomes %>% filter(scenario == "S1_base")
+final_outcomes_vs_base <- final_outcomes %>%
+  mutate(
+    d_total_cases_vs_S1 = cum_total_cases - base_row$cum_total_cases,
+    d_identified_vs_S1 = cum_identified_cases - base_row$cum_identified_cases,
+    d_missed_vs_S1 = cum_missed_cases - base_row$cum_missed_cases,
+    d_side_room_days_vs_S1 = cum_side_room_patient_days - base_row$cum_side_room_patient_days
+  )
+
+write_csv(final_outcomes_vs_base, "Outputs/final_outcomes_vs_base.csv")
+knitr::kable(final_outcomes_vs_base, caption = "Final cumulative outcomes (with deltas vs S1 base)")
+```
+
+## 10) Plots
+
+```{r}
+plot_long_states <- bind_rows(lapply(names(scenario_abso), function(nm) {
+  scenario_abso[[nm]] %>%
+    select(time, S, C, I, X) %>%
+    pivot_longer(cols = c(S,C,I,X), names_to = "state", values_to = "count") %>%
+    mutate(scenario = nm)
+}))
+
+# 10.1 State lines by scenario (faceted)
+p_states_line <- ggplot(plot_long_states, aes(time, count, color = state)) +
+  geom_line() +
+  facet_wrap(~scenario, scales = "free_y") +
+  theme_classic() +
+  labs(title = "State trajectories by scenario", x = "Days post burn-in", y = "Count")
+ggsave("Outputs/plot_states_lines_facet.png", p_states_line, width = 12, height = 8, dpi = 300)
+
+# 10.2 State stacked area by scenario
+p_states_area <- ggplot(plot_long_states, aes(time, count, fill = state)) +
+  geom_area() +
+  facet_wrap(~scenario, scales = "free_y") +
+  theme_classic() +
+  labs(title = "State composition over time", x = "Days post burn-in", y = "Count")
+ggsave("Outputs/plot_states_area_facet.png", p_states_area, width = 12, height = 8, dpi = 300)
+
+# Flows for plotting
+plot_long_flows <- bind_rows(lapply(names(scenario_abso), function(nm) {
+  scenario_abso[[nm]] %>%
+    select(time, flow_S_to_C, flow_C_to_I, flow_I_to_X, flow_X_to_S, flow_X_to_I,
+           total_cases, identified_cases, missed_cases, missed_untested, missed_false_negative,
+           side_room_patient_days,
+           cum_total_cases, cum_identified_cases, cum_missed_cases,
+           cum_missed_untested, cum_missed_false_negative, cum_side_room_patient_days) %>%
+    mutate(scenario = nm)
+}))
+
+# 10.3 Key daily flows
+p_daily_flows <- plot_long_flows %>%
+  select(time, scenario, flow_S_to_C, flow_C_to_I, flow_I_to_X, flow_X_to_S, flow_X_to_I) %>%
+  pivot_longer(cols = -c(time, scenario), names_to = "flow", values_to = "value") %>%
+  ggplot(aes(time, value, color = flow)) +
+  geom_line() +
+  facet_wrap(~scenario, scales = "free_y") +
+  theme_classic() +
+  labs(title = "Key daily flows", x = "Days post burn-in", y = "Flow/day")
+ggsave("Outputs/plot_daily_flows_facet.png", p_daily_flows, width = 12, height = 8, dpi = 300)
+
+# 10.4 Cumulative total/identified/missed
+p_cum_cases <- plot_long_flows %>%
+  select(time, scenario, cum_total_cases, cum_identified_cases, cum_missed_cases) %>%
+  pivot_longer(cols = -c(time, scenario), names_to = "series", values_to = "value") %>%
+  ggplot(aes(time, value, color = series)) +
+  geom_line(size = 1) +
+  facet_wrap(~scenario, scales = "free_y") +
+  theme_classic() +
+  labs(title = "Cumulative cases", x = "Days post burn-in", y = "Cumulative count")
+ggsave("Outputs/plot_cumulative_cases_facet.png", p_cum_cases, width = 12, height = 8, dpi = 300)
+
+# 10.5 Missed cases breakdown
+p_missed_breakdown <- plot_long_flows %>%
+  select(time, scenario, cum_missed_untested, cum_missed_false_negative) %>%
+  pivot_longer(cols = -c(time, scenario), names_to = "missed_type", values_to = "value") %>%
+  ggplot(aes(time, value, color = missed_type)) +
+  geom_line(size = 1) +
+  facet_wrap(~scenario, scales = "free_y") +
+  theme_classic() +
+  labs(title = "Cumulative missed cases breakdown", x = "Days post burn-in", y = "Cumulative count")
+ggsave("Outputs/plot_cumulative_missed_breakdown_facet.png", p_missed_breakdown, width = 12, height = 8, dpi = 300)
+
+# 10.6 Side-room patient-days over time
+p_side_room <- plot_long_flows %>%
+  ggplot(aes(time, side_room_patient_days, color = scenario)) +
+  geom_line(size = 1) +
+  theme_classic() +
+  labs(title = "Side-room occupancy over time", x = "Days post burn-in", y = "Patient-days/day")
+ggsave("Outputs/plot_side_room_occupancy.png", p_side_room, width = 10, height = 6, dpi = 300)
+
+# 10.7 Final outcomes comparison bars
+final_long <- final_outcomes_vs_base %>%
+  select(scenario, cum_total_cases, cum_identified_cases, cum_missed_cases, cum_side_room_patient_days) %>%
+  pivot_longer(-scenario, names_to = "metric", values_to = "value")
+
+p_final_bars <- ggplot(final_long, aes(scenario, value, fill = scenario)) +
+  geom_col() +
+  facet_wrap(~metric, scales = "free_y") +
+  theme_classic() +
+  theme(legend.position = "none") +
+  labs(title = "Final cumulative outcomes by scenario", x = "", y = "Value")
+ggsave("Outputs/plot_final_outcomes_bars.png", p_final_bars, width = 12, height = 8, dpi = 300)
+
+p_states_line
+p_states_area
+p_daily_flows
+p_cum_cases
+p_missed_breakdown
+p_side_room
+p_final_bars
+```
+
+## 11) Save parameter table
+
+```{r}
+all_parms <- bind_rows(
+  S1_base = as_tibble(mod.parms.S1),
+  S2_lowSe_highSp = as_tibble(mod.parms.S2),
+  S3_highSe_lowSp = as_tibble(mod.parms.S3),
+  S4_lowSe_lowSp = as_tibble(mod.parms.S4),
+  .id = "scenario"
+)
+write_csv(all_parms, "Outputs/model_parameters_all_scenarios.csv")
+knitr::kable(all_parms, caption = "Model parameters for all scenarios")
+```

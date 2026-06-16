@@ -1,0 +1,5 @@
+scenario,isolate_before_test,prop_I_suspected,test_sens,t_test_turnaround
+S1,TRUE,1,1,2
+S2,TRUE,1,0.5,2
+S3,TRUE,0.5,1,2
+S4,TRUE,0.5,0.5,2

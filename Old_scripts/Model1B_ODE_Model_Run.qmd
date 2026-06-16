@@ -1,0 +1,604 @@
+---
+title: "Model 1B ODE Run"
+format:
+  html:
+    toc: true
+    code-fold: false
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## 1) Introduction
+
+This script runs the ODE model for Model 1, which simulates the transmission dynamics of a healthcare-associated pathogen within a hospital setting. The model tracks the flow of patients through various states of colonisation and infection, as well as the impact of testing and isolation practices on case detection and missed cases.
+
+This script uses the ODE function defined in "Model1_ODE_Functions.R" and the parameter sets defined in "Model1_ODE_Parameters.R" to run multiple scenarios (S1-S4) and generates outputs including time series of model states and flows, annual summaries, stabilisation assessments, and final cumulative outcomes. The outputs are saved as CSV files in the "Outputs" directory and key results are also presented in tables and plots.
+
+![](Images/260422%20Model%201%20diagram/Slide1.PNG)
+
+The model compartments are:\
+- **S (Susceptible)**: Not colonised or infected\
+- **C (Colonised)**: Carrying the pathogen but not infected\
+- **I (Infected)**: Showing symptoms caused by the pathogen\
+- **Xtest (Suspected cases)**: Isolated or on a general ward (depending on whether isolate_before_test is TRUE or FALSE), awaiting test result\
+- **Xtreat (Confirmed cases)**: Isolated and receiving treatment, awaiting recovery & discharge or return to a general ward\
+- **D: Dead**: cumulative count of deaths (absorbing state)
+
+The control variables for scenarios (with default values set in the parameters script) are:\
+- **isolate_before_test**: Whether patients are isolated while awaiting test results (TRUE/FALSE)\
+- **prop_I_suspected**: Proportion of infected patients who are identified as suspected cases and tested\
+- **test_sens**: Sensitivity of the diagnostic test (proportion of infected cases that test positive)\
+- **test_turnaround**: Time in days between test administration and result availability, plus the time required to transfer a patient to a side room if isolate_before_test = TRUE\
+
+## 2) Initial setup
+
+```{r}
+rm(list = ls())
+
+library(tidyverse)
+library(deSolve)
+library(scales)
+
+options(scipen = 1000)
+
+dir.create("Outputs", showWarnings = FALSE, recursive = TRUE)
+
+source("Scripts/Model1_ODE_Functions.R")
+source("Scripts/Model1_ODE_Parameters.R")
+```
+
+## 3) Model settings
+
+Set the model run settings (total model run time and time step) here. Use the validate_run_settings() function to check that the settings are consistent (e.g. burn-in period is less than total model time, time step is positive and less than total model time).
+
+The ODE solver will produce outputs at every time step. The ODE outputs are counts for each model compartment (or "state") and rates per day for flows between compartments, admissions and discharges, where:\
+- Per-step flow quantity = rate_per_day \* time_step;\
+- Annual totals = sum(per-step quantities within each year);\
+- Cumulative totals = sum(per-step quantities across the whole model run).
+
+```{r}
+
+run_settings <- list(
+  # total model run time in days (e.g. 365*5 for 5 years)
+  model_time = 365 * 5,
+  # time step in days between ODE solver output points (e.g. 0.5 for half-day steps)
+  time_step = 0.5
+  )
+
+validate_run_settings(run_settings$model_time,
+                      run_settings$time_step)
+
+model_time <- run_settings$model_time
+time_step <- run_settings$time_step
+mod.t <- seq(0, model_time, by = time_step)
+
+```
+
+## 4) Initial conditions
+
+```{r}
+S0 <- 870
+C0 <- 120
+I0 <- 10
+Xtest0 <- 0
+Xtreat0 <- 0
+D0 <- 0
+
+mod.init <- c(
+  S = S0,
+  C = C0,
+  I = I0,
+  Xtest = Xtest0,
+  Xtreat = Xtreat0,
+  D = D0
+)
+```
+
+## 5) Define scenarios
+
+Set values for the scenario control variables, for four scenarios.
+
+Run the 'make_mod_parms()' function to create a list of model parameters for each scenario, which will be passed to the ODE solver. The function will also check that the control variable values are valid (e.g. proportions between 0 and 1, test turnaround time non-negative).
+
+```{r}
+
+# Baseline (S1)
+mod.parms.S1 <- make_mod_parms(
+  isolate_before_test = FALSE,
+  prop_I_suspected = 1.00,
+  test_sens = 1.00,
+  test_turnaround = 2,
+  scenario_label = "S1"
+)
+
+# Reduced test sensitivity (S2)
+mod.parms.S2 <- make_mod_parms(
+  isolate_before_test = FALSE,
+  prop_I_suspected = 1.00,
+  test_sens = 0.50,
+  test_turnaround = 2,
+  scenario_label = "S2"
+)
+
+# Reduced case identification (S3)
+mod.parms.S3 <- make_mod_parms(
+  isolate_before_test = FALSE,
+  prop_I_suspected = 0.50,
+  test_sens = 1.00,
+  test_turnaround = 2,
+  scenario_label = "S3"
+)
+
+# Reduced sensitivity and identification (S4)
+mod.parms.S4 <- make_mod_parms(
+  isolate_before_test = FALSE,
+  prop_I_suspected = 0.50,
+  test_sens = 0.50,
+  test_turnaround = 2,
+  scenario_label = "S4"
+)
+
+scenario_parms <- list(S1 = mod.parms.S1,
+                       S2 = mod.parms.S2,
+                       S3 = mod.parms.S3,
+                       S4 = mod.parms.S4)
+
+all_parms <- bind_rows(
+  S1 = as_tibble(mod.parms.S1),
+  S2 = as_tibble(mod.parms.S2),
+  S3 = as_tibble(mod.parms.S3),
+  S4 = as_tibble(mod.parms.S4),
+  .id = "scenario"
+)
+
+write_csv(all_parms, "Outputs/model_parameters_all_scenarios.csv")
+
+```
+
+## 6) Run scenarios
+
+```{r}
+
+scenario_raw <- lapply(scenario_parms, run_scenario)
+scenario_post <- Map(
+  f = function(df, parms) {
+    df %>%
+      add_flow_quantities(time_step = time_step)
+  },
+  df = scenario_raw,
+  parms = scenario_parms
+)
+
+walk2(scenario_post, names(scenario_post), ~ write_csv(.x, paste0("Outputs/solution_", .y, ".csv")))
+```
+
+## 7) Annual summary tables
+
+```{r}
+
+annual_summary_all <- bind_rows(
+  make_annual_summary(scenario_post$S1, "S1"),
+  make_annual_summary(scenario_post$S2, "S2"),
+  make_annual_summary(scenario_post$S3, "S3"),
+  make_annual_summary(scenario_post$S4, "S4")
+)
+
+write_csv(annual_summary_all, "Outputs/annual_summary_all.csv")
+knitr::kable(annual_summary_all, caption = "Annual summary (post burn-in period)")
+```
+
+## 8) Stabilisation summary (states + flows)
+
+```{r}
+
+stability_all <- bind_rows(
+  stabilisation_summary(scenario_post$S1, "S1"),
+  stabilisation_summary(scenario_post$S2, "S2"),
+  stabilisation_summary(scenario_post$S3, "S3"),
+  stabilisation_summary(scenario_post$S4, "S4")
+)
+
+# Find the longest stabilisation period among the scenarios
+
+longest_stabilisation <- max(stability_all$stabilisation_day, na.rm = TRUE)
+
+write_csv(stability_all,
+          "Outputs/stabilisation_summary_states_flows.csv")
+knitr::kable(stability_all, caption = "Stabilisation: model states and flows")
+```
+
+## 9) Negative values checks
+
+```{r}
+neg_tables <- lapply(scenario_post, negative_value_rows)
+
+walk2(neg_tables, names(neg_tables), ~ write_csv(.x, paste0("Outputs/negative_rows_", .y, ".csv")))
+
+```
+
+## 10) Final cumulative outcomes table
+
+```{r}
+final_outcomes <- bind_rows(lapply(names(scenario_post), function(nm) {
+  
+   last <- scenario_post[[nm]] %>% filter(time == max(time)) %>% slice(1)
+  
+  tibble(
+    scenario = nm,
+    final_S = last$S,
+    final_C = last$C,
+    final_I = last$I,
+    final_Xtest = last$Xtest,
+    final_Xtreat = last$Xtreat,
+    
+    cum_colonised_incidence = last$cum_total_colonised_incidence,
+    cum_infected_incidence = last$cum_total_infected_incidence,
+    cum_suspected_cases = last$cum_suspected_cases,
+    cum_confirmed_cases = last$cum_confirmed_cases,
+    
+    cum_missed_cases = last$cum_missed_cases,
+    cum_missed_untested = last$cum_missed_untested,
+    cum_missed_false_negative = last$cum_missed_false_negative,
+    cum_recovered_cases = last$cum_recovered_cases,
+    
+    cum_deaths_infected = last$cum_deaths_infected,
+    cum_deaths_suspected_cases = last$cum_deaths_suspected_cases,
+    cum_deaths_confirmed_cases = last$cum_deaths_confirmed_cases,
+    cum_total_deaths = last$cum_total_deaths,
+    
+    cum_side_room_patient_days = last$cum_side_room_patient_days
+  )
+}))
+
+base_row <- final_outcomes %>% filter(scenario == "S1")
+
+final_outcomes_vs_base <- final_outcomes %>%
+  mutate(
+    d_S_vs_S1 = final_S - base_row$final_S,
+    d_C_vs_S1 = final_C - base_row$final_C,
+    d_I_vs_S1 = final_I - base_row$final_I,
+    d_Xtest_vs_S1 = final_Xtest - base_row$final_Xtest,
+    d_Xtreat_vs_S1 = final_Xtreat - base_row$final_Xtreat,
+   
+    d_colonised_incidence_vs_S1 = cum_colonised_incidence - base_row$cum_colonised_incidence,
+    d_infected_incidence_vs_S1 = cum_infected_incidence - base_row$cum_infected_incidence,
+    d_confirmed_cases_vs_S1 = cum_confirmed_cases - base_row$cum_confirmed_cases,
+    d_suspected_cases_vs_S1 = cum_suspected_cases - base_row$cum_suspected_cases,
+   
+    d_missed_cases_vs_S1 = cum_missed_cases - base_row$cum_missed_cases,
+    d_missed_untested_vs_S1 = cum_missed_untested - base_row$cum_missed_untested,
+    d_missed_false_negative_vs_S1 = cum_missed_false_negative - base_row$cum_missed_false_negative,
+    d_recovered_cases_vs_S1 = cum_recovered_cases - base_row$cum_recovered_cases,
+    
+    d_deaths_infected_vs_S1 = cum_deaths_infected - base_row$cum_deaths_infected,
+    d_deaths_suspected_cases_vs_S1 = cum_deaths_suspected_cases - base_row$cum_deaths_suspected_cases,
+    d_deaths_confirmed_cases_vs_S1 = cum_deaths_confirmed_cases - base_row$cum_deaths_confirmed_cases,
+    d_total_deaths_vs_S1 = cum_total_deaths - base_row$cum_total_deaths,
+    
+    d_side_room_days_vs_S1 = cum_side_room_patient_days - base_row$cum_side_room_patient_days
+  ) %>%
+  select(scenario, starts_with("d_"))
+
+write_csv(final_outcomes,
+          "Outputs/final_outcomes_all.csv")
+knitr::kable(final_outcomes, caption = "Model end states and cumulative flows (post burn-in period)")
+
+write_csv(final_outcomes_vs_base,
+          "Outputs/final_outcomes_vs_base.csv")
+knitr::kable(final_outcomes_vs_base, caption = "Difference in model end states and cumulative flows vs base scenario S1 (post burn-in period)")
+```
+
+## 11) Plots
+
+```{r}
+
+
+# Set the colour palette for the states and flows to be consistent across plots
+
+colour_palette <- c(
+  "S" = "#1b9e77",
+  "C" = "#d95f02",
+  "I" = "#7570b3",
+  "Xtest" = "#e7298a",
+  "Xtreat" = "#66a61e",
+  
+  "colonised_in_hospital_rate" = "#1b9e77",
+  "admitted_colonised_rate" = "#1b9e77",
+  "discharges_colonised_rate" = "#1b9e77",
+  "deaths_colonised_rate" = "#1b9e77",
+  
+  
+  
+  "infected_in_hospital_rate" = "#d95f02",
+  "admitted_infected_rate" = "#d95f02",
+  "total_infected_incidence_rate" = "#d95f02",
+  
+  "suspected_cases_rate" = "#7570b3",
+  "missed_untested_cases_rate" = "#e7298a",
+  "deaths_suspected_cases_rate" = "#1b9e77",
+  
+  "confirmed_cases_rate" = "#e7298a",
+  "missed_false_negative_cases_rate" = "#e7298a",
+  
+  "recovered_cases_rate" = "#66a61e"
+  
+)
+
+plot_long_states <- bind_rows(lapply(names(scenario_post), function(nm) {
+  scenario_raw[[nm]] %>%
+    select(time, S, C, I, Xtest, Xtreat) %>%
+    pivot_longer(
+      cols = c(S, C, I, Xtest, Xtreat),
+      names_to = "State",
+      values_to = "Count"
+    ) %>%
+    mutate(
+      scenario = nm,
+      # Set the order of the states for consistent plotting
+      state = factor(State, levels = c("S", "C", "I", "Xtest", "Xtreat"))
+    ) %>%
+  filter(time < longest_stabilisation)
+}))
+
+p_states_line <- ggplot(plot_long_states, aes(time, Count, color = State)) +
+  geom_line() +
+  facet_wrap(
+    ~ scenario
+    #, scales = "free_y"
+  ) +
+  theme_classic() +
+  labs(
+    title = "Hospital patients, trajectories by state",
+    x = "Days (up to model stabilistation)",
+    y = "Count"
+  )
+ggsave(
+  "Outputs/plot_states_lines_facet.png",
+  p_states_line,
+  width = 12,
+  height = 8,
+  dpi = 300
+)
+
+p_states_area <- ggplot(plot_long_states, aes(time, Count, fill = State)) +
+  geom_area() +
+  facet_wrap(
+    ~ scenario
+    #, scales = "free_y"
+  ) +
+  theme_classic() +
+  labs(title = "Hospital patients, composition by state", 
+       x = "Days (up to model stabilisation)",
+       y = "Count")
+ggsave(
+  "Outputs/plot_states_area_facet.png",
+  p_states_area,
+  width = 12,
+  height = 8,
+  dpi = 300
+)
+
+plot_long_flows <- bind_rows(lapply(names(scenario_post), function(nm) {
+  scenario_post[[nm]] %>%
+    select(
+      time,
+      colonised_in_hospital_rate,
+      admitted_colonised_rate,
+      decolonised_in_hospital_rate,
+      infected_in_hospital_rate,
+      admitted_infected_rate,
+      total_infected_incidence_rate,
+      suspected_cases_rate,
+      confirmed_cases_rate,
+      missed_untested_cases_rate,
+      missed_false_negative_cases_rate,
+      total_missed_cases_rate,
+      recovered_cases_rate,
+      discharges_colonised_rate,
+      discharges_infected_rate,
+      discharges_recovered_rate,
+      deaths_infected_rate,
+      deaths_suspected_cases_rate,
+      deaths_confirmed_cases_rate,
+      total_colonised_incidence_rate,
+      total_admissions_rate,
+      total_discharges_rate,
+      total_deaths_rate,
+      total_exits_rate,
+      side_room_patient_days,
+      cum_total_colonised_incidence,
+      cum_total_infected_incidence,
+      cum_suspected_cases,
+      cum_confirmed_cases,
+      cum_missed_cases,
+      cum_missed_untested,
+      cum_missed_false_negative,
+      cum_side_room_patient_days
+    ) %>%
+    mutate(scenario = nm)
+}))
+
+p_daily_flows <- plot_long_flows %>%
+  filter(time < longest_stabilisation) %>%
+  select(
+    time,
+    scenario,
+    colonised_in_hospital_rate,
+    infected_in_hospital_rate,
+    suspected_cases_rate,
+    confirmed_cases_rate,
+    recovered_cases_rate
+  ) %>%
+  pivot_longer(
+    cols = -c(time, scenario),
+    names_to = "Flow",
+    values_to = "Value"
+  ) %>%
+   # Set the order of the flows for consistent plotting
+  mutate(
+    Flow = factor(
+      Flow,
+      levels = c(
+        "colonised_in_hospital_rate",
+        "infected_in_hospital_rate",
+        "suspected_cases_rate",
+        "confirmed_cases_rate",
+        "recovered_cases_rate"
+      )
+    )) %>%
+  ggplot(aes(time, Value, color = Flow)) +
+  geom_line() +
+  facet_wrap(
+    ~ scenario
+    #, scales = "free_y"
+  ) +
+  theme_classic() +
+  labs(title = "New colonisations, infections, suspected cases, confirmed cases and recoveries", 
+       x = "Days (up to model stabilisation)",
+       y = "Rate per day")
+
+ggsave(
+  "Outputs/plot_daily_flows_facet.png",
+  p_daily_flows,
+  width = 12,
+  height = 8,
+  dpi = 300
+)
+
+p_cum_cases <- plot_long_flows %>%
+  select(
+    time,
+    scenario,
+    cum_total_infected_incidence,
+    cum_confirmed_cases,
+    cum_missed_cases
+  ) %>%
+  pivot_longer(
+    cols = -c(time, scenario),
+    names_to = "series",
+    values_to = "value"
+  ) %>%
+  ggplot(aes(time, value, color = series)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(
+    ~ scenario
+    #, scales = "free_y"
+  ) +
+  theme_classic() +
+  labs(title = "Cumulative infected incidence, confirmed cases and missed cases", 
+       x = "Days (model run period)",
+       y = "Cumulative count",
+       color = "Type of case")
+ggsave(
+  "Outputs/plot_cumulative_cases_facet.png",
+  p_cum_cases,
+  width = 12,
+  height = 8,
+  dpi = 300
+)
+
+p_missed_breakdown <- plot_long_flows %>%
+  select(time,
+         scenario,
+         cum_missed_untested,
+         cum_missed_false_negative) %>%
+  pivot_longer(
+    cols = -c(time, scenario),
+    names_to = "missed_type",
+    values_to = "value"
+  ) %>%
+  ggplot(aes(time, value, color = missed_type)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(
+    ~ scenario
+    #, scales = "free_y"
+  ) +
+  theme_classic() +
+  labs(title = "Cumulative missed cases breakdown", 
+       x = "Days (model run period)",
+       y = "Cumulative count",
+       color = "Type of missed case")
+ggsave(
+  "Outputs/plot_cumulative_missed_breakdown_facet.png",
+  p_missed_breakdown,
+  width = 12,
+  height = 8,
+  dpi = 300
+)
+
+p_side_room <- plot_long_flows %>%
+  ggplot(aes(time, side_room_patient_days, color = scenario)) +
+  geom_line(linewidth = 1) +
+  theme_classic() +
+  labs(title = "Side-room occupancy", 
+       x = "Days (model run period)",
+       y = "Occupied side rooms per day",
+       color = "Scenario")
+ggsave(
+  "Outputs/plot_side_room_occupancy.png",
+  p_side_room,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
+final_long <- final_outcomes %>%
+  select(
+    scenario,
+    cum_infected_incidence,
+    cum_confirmed_cases,
+    cum_missed_cases,
+    cum_side_room_patient_days
+  ) %>%
+  pivot_longer(-scenario, names_to = "metric", values_to = "value")
+
+p_final_bars <- ggplot(final_long, aes(scenario, value, fill = scenario)) +
+  geom_col() +
+  facet_wrap(
+    ~ metric
+    #, scales = "free_y"
+  ) +
+  theme_classic() +
+  theme(legend.position = "none") +
+  labs(title = "Cumulative outcomes by scenario", 
+       x = "", 
+       y = "Value")
+
+ggsave(
+  "Outputs/plot_cumulative_outcomes_bars.png",
+  p_final_bars,
+  width = 12,
+  height = 8,
+  dpi = 300
+)
+
+# Create a small summary table of scenario control parameters
+scenario_summary <- bind_rows(lapply(names(scenario_parms), function(nm) {
+  p <- scenario_parms[[nm]]
+  tibble(
+    Scenario = nm,
+    `Isolate before test` = p$isolate_before_test,
+    `Prop. suspected cases identified` = p$prop_I_suspected,
+    `Test sensitivity` = p$test_sens,
+    `Test turnaround (days)` = p$test_turnaround
+  )
+}))
+
+# Print it in the HTML document
+knitr::kable(scenario_summary, caption = "Reference: Scenario Control Parameters")
+
+# Optionally save it to your Outputs folder
+write_csv(scenario_summary, "Outputs/scenario_control_parameters.csv")
+
+p_states_line
+p_states_area
+p_daily_flows
+p_cum_cases
+p_missed_breakdown
+p_side_room
+p_final_bars
+
+```
+
+## End of script

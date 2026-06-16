@@ -1,0 +1,2986 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Model 1 ODE Run</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="Model1_ODE_Model_Run_files/libs/clipboard/clipboard.min.js"></script>
+<script src="Model1_ODE_Model_Run_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="Model1_ODE_Model_Run_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="Model1_ODE_Model_Run_files/libs/quarto-html/popper.min.js"></script>
+<script src="Model1_ODE_Model_Run_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="Model1_ODE_Model_Run_files/libs/quarto-html/anchor.min.js"></script>
+<link href="Model1_ODE_Model_Run_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="Model1_ODE_Model_Run_files/libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="Model1_ODE_Model_Run_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="Model1_ODE_Model_Run_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="Model1_ODE_Model_Run_files/libs/bootstrap/bootstrap-efbb37e9afcc02144ebbc7afd12a776f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a></li>
+  <li><a href="#initial-setup" id="toc-initial-setup" class="nav-link" data-scroll-target="#initial-setup">1) Initial setup</a></li>
+  <li><a href="#source-parameters-and-functions" id="toc-source-parameters-and-functions" class="nav-link" data-scroll-target="#source-parameters-and-functions">2) Source parameters and functions</a></li>
+  <li><a href="#define-scenarios" id="toc-define-scenarios" class="nav-link" data-scroll-target="#define-scenarios">3) Define scenarios</a></li>
+  <li><a href="#model-settings" id="toc-model-settings" class="nav-link" data-scroll-target="#model-settings">4) Model settings</a></li>
+  <li><a href="#initial-conditions" id="toc-initial-conditions" class="nav-link" data-scroll-target="#initial-conditions">5) Initial conditions</a></li>
+  <li><a href="#run-scenarios" id="toc-run-scenarios" class="nav-link" data-scroll-target="#run-scenarios">6) Run scenarios</a></li>
+  <li><a href="#negative-values-checks" id="toc-negative-values-checks" class="nav-link" data-scroll-target="#negative-values-checks">7) Negative values checks</a></li>
+  <li><a href="#stabilisation-summary" id="toc-stabilisation-summary" class="nav-link" data-scroll-target="#stabilisation-summary">8) Stabilisation summary</a></li>
+  <li><a href="#annual-summary-tables" id="toc-annual-summary-tables" class="nav-link" data-scroll-target="#annual-summary-tables">9) Annual summary tables</a></li>
+  <li><a href="#final-cumulative-outcomes-table" id="toc-final-cumulative-outcomes-table" class="nav-link" data-scroll-target="#final-cumulative-outcomes-table">10) Final cumulative outcomes table</a></li>
+  <li><a href="#plots" id="toc-plots" class="nav-link" data-scroll-target="#plots">11) Plots</a></li>
+  <li><a href="#end-of-script" id="toc-end-of-script" class="nav-link" data-scroll-target="#end-of-script">End of script</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Model 1 ODE Run</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+<p>This script runs the ODE model for Model 1, which simulates the transmission dynamics of a healthcare-associated pathogen within a hospital setting. The model tracks the flow of patients through various states of colonisation and infection, as well as the impact of testing and isolation practices on case detection and missed cases.</p>
+<p>This script uses the ODE function defined in “Model1_ODE_Functions.R” and the parameter sets defined in “Model1_ODE_Parameters.R” to run multiple scenarios (S1-S4) and generates outputs including time series of model states and flows, annual summaries, stabilisation assessments, and final cumulative outcomes. The outputs are saved as CSV files in a labelled subdirectory of <code>Outputs/</code> and key results are also presented in tables and plots.</p>
+<p><img src="Images/260422%20Model%201%20diagram/Slide1.PNG" class="img-fluid">The model compartments are:<br>
+- <strong>S (Susceptible)</strong>: Not colonised or infected<br>
+- <strong>C (Colonised)</strong>: Carrying the pathogen but not infected<br>
+- <strong>I (Infected)</strong>: Showing symptoms caused by the pathogen<br>
+- <strong>Xtest (Suspected cases)</strong>: Isolated or on a general ward, awaiting test result<br>
+- <strong>FN (False negatives)</strong>: Symptomatic patients with a false negative result, not isolated, awaiting re-testing<br>
+- <strong>Xtreat (Confirmed cases)</strong>: Isolated and receiving treatment, awaiting recovery and discharge<br>
+- <strong>D: Dead</strong>: cumulative count of deaths (absorbing state)</p>
+<p>The control variables for scenarios are:<br>
+- <strong>isolate_before_test</strong>: Whether patients are isolated while awaiting test results (TRUE/FALSE)<br>
+- <strong>prop_I_suspected</strong>: Proportion of infected patients identified as suspected cases<br>
+- <strong>test_sens</strong>: Sensitivity of the diagnostic test<br>
+- <strong>t_test_turnaround</strong>: Time in days between test administration and result availability<br>
+</p>
+</section>
+<section id="initial-setup" class="level2">
+<h2 class="anchored" data-anchor-id="initial-setup">1) Initial setup</h2>
+<p>Load libraries, set options, and create an output directory for this run.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(<span class="at">list =</span> <span class="fu">setdiff</span>(<span class="fu">ls</span>(), <span class="st">"params"</span>))</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(deSolve)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(scales)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(cowplot)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">scipen =</span> <span class="dv">1000</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>output_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(<span class="st">"Outputs"</span>, params<span class="sc">$</span>run_label)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(output_dir, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="source-parameters-and-functions" class="level2">
+<h2 class="anchored" data-anchor-id="source-parameters-and-functions">2) Source parameters and functions</h2>
+<p>Source the ODE functions and parameter sets for the model. The functions include the ODE system definition, scenario running function, and various post-processing functions for summarising and plotting results. The parameters script defines the fixed model parameters (e.g., transmission rates, recovery rates) and the <code>make_mod_parms()</code> function used to build scenario parameter lists in section 3.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"Scripts/Model1_ODE_Functions.R"</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"Scripts/Model1_ODE_Parameters.R"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="define-scenarios" class="level2">
+<h2 class="anchored" data-anchor-id="define-scenarios">3) Define scenarios</h2>
+<p>Set values for the control parameters for each scenario (S1-S4) and create a list of scenario parameters. Also create a combined data frame of all scenario parameters for reference and save it as a CSV.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>mod.parms.S1 <span class="ot">&lt;-</span> <span class="fu">make_mod_parms</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">isolate_before_test =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">prop_I_suspected =</span> <span class="fl">1.00</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">test_sens =</span> <span class="fl">1.00</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">t_test_turnaround =</span> <span class="dv">2</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">scenario_label =</span> <span class="st">"S1"</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>mod.parms.S2 <span class="ot">&lt;-</span> <span class="fu">make_mod_parms</span>(</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">isolate_before_test =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">prop_I_suspected =</span> <span class="fl">1.00</span>,</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">test_sens =</span> <span class="fl">0.50</span>,</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">t_test_turnaround =</span> <span class="dv">2</span>,</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">scenario_label =</span> <span class="st">"S2"</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>mod.parms.S3 <span class="ot">&lt;-</span> <span class="fu">make_mod_parms</span>(</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">isolate_before_test =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">prop_I_suspected =</span> <span class="fl">0.50</span>,</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">test_sens =</span> <span class="fl">1.00</span>,</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">t_test_turnaround =</span> <span class="dv">2</span>,</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">scenario_label =</span> <span class="st">"S3"</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>mod.parms.S4 <span class="ot">&lt;-</span> <span class="fu">make_mod_parms</span>(</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">isolate_before_test =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">prop_I_suspected =</span> <span class="fl">0.50</span>,</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">test_sens =</span> <span class="fl">0.50</span>,</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">t_test_turnaround =</span> <span class="dv">2</span>,</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">scenario_label =</span> <span class="st">"S4"</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>scenario_parms <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">S1 =</span> mod.parms.S1,</span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>                       <span class="at">S2 =</span> mod.parms.S2,</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>                       <span class="at">S3 =</span> mod.parms.S3,</span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>                       <span class="at">S4 =</span> mod.parms.S4)</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>all_parms <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>  <span class="at">S1 =</span> <span class="fu">as_tibble</span>(mod.parms.S1),</span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>  <span class="at">S2 =</span> <span class="fu">as_tibble</span>(mod.parms.S2),</span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>  <span class="at">S3 =</span> <span class="fu">as_tibble</span>(mod.parms.S3),</span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>  <span class="at">S4 =</span> <span class="fu">as_tibble</span>(mod.parms.S4),</span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>  <span class="at">.id =</span> <span class="st">"scenario"</span></span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(all_parms,</span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>          <span class="fu">file.path</span>(output_dir, <span class="st">"model_parameters_all_scenarios.csv"</span>))</span>
+<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>control_parms <span class="ot">&lt;-</span> all_parms <span class="sc">|&gt;</span></span>
+<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(scenario, isolate_before_test, prop_I_suspected, test_sens, t_test_turnaround)</span>
+<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(control_parms,</span>
+<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>          <span class="fu">file.path</span>(output_dir, <span class="st">"scenario_control_parameters.csv"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="model-settings" class="level2">
+<h2 class="anchored" data-anchor-id="model-settings">4) Model settings</h2>
+<p>Set the total model run time and time step for the ODE solver. Validate that the settings are appropriate (e.g., time step is positive and less than model time). Create a sequence of time points for the model output.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>run_settings <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">model_time =</span> <span class="dv">365</span> <span class="sc">*</span> <span class="dv">5</span>,</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">time_step  =</span> <span class="fl">0.5</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">validate_run_settings</span>(run_settings<span class="sc">$</span>model_time, run_settings<span class="sc">$</span>time_step)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>model_time <span class="ot">&lt;-</span> run_settings<span class="sc">$</span>model_time</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>time_step  <span class="ot">&lt;-</span> run_settings<span class="sc">$</span>time_step</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>mod.t      <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, model_time, <span class="at">by =</span> time_step)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="initial-conditions" class="level2">
+<h2 class="anchored" data-anchor-id="initial-conditions">5) Initial conditions</h2>
+<p>Set the initial conditions for the model states (S, C, I, Xtest, FN, Xtreat, D) at time 0. These values represent the starting point of the simulation and can be adjusted as needed for different scenarios or sensitivity analyses.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>S0      <span class="ot">&lt;-</span> <span class="dv">909</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>C0      <span class="ot">&lt;-</span> <span class="dv">86</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>I0      <span class="ot">&lt;-</span> <span class="dv">5</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>Xtest0  <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>FN0     <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>Xtreat0 <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>D0      <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>mod.init <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">S      =</span> S0,</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">C      =</span> C0,</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">I      =</span> I0,</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">Xtest  =</span> Xtest0,</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">FN     =</span> FN0,</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">Xtreat =</span> Xtreat0,</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">D      =</span> D0</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="run-scenarios" class="level2">
+<h2 class="anchored" data-anchor-id="run-scenarios">6) Run scenarios</h2>
+<p>Run the ODE model for each scenario using the <code>run_scenario</code> function, which takes the scenario parameters and returns a data frame of model states and flows over time. Then, post-process the raw model output to add flow quantities (e.g., cumulative cases, missed cases) using the <code>add_flow_quantities</code> function. Finally, save the post-processed outputs as CSV files in the output directory.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Run the ODE model</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>scenario_raw  <span class="ot">&lt;-</span> <span class="fu">lapply</span>(scenario_parms, run_scenario)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Post-process the raw model output to add flow quantities (e.g., cumulative cases, missed cases)</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>scenario_post <span class="ot">&lt;-</span> <span class="fu">Map</span>(</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">f =</span> <span class="cf">function</span>(df, parms)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    df <span class="sc">%&gt;%</span> <span class="fu">add_quantities</span>(<span class="at">time_step =</span> time_step),</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">df =</span> scenario_raw,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">parms =</span> scenario_parms</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Save the post-processed outputs as CSV files in the output directory</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="fu">walk2</span>(scenario_post,</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>      <span class="fu">names</span>(scenario_post),</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>      <span class="sc">~</span> <span class="fu">write_csv</span>(.x, <span class="fu">file.path</span>(</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>        output_dir, <span class="fu">paste0</span>(<span class="st">"solution_"</span>, .y, <span class="st">".csv"</span>)</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>      )))</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Patient-days table for each scenario</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>patient_days_summary <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">lapply</span>(scenario_post, calculate_total_patient_days),</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">.id =</span> <span class="st">"scenario"</span></span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(patient_days_summary, <span class="fu">file.path</span>(output_dir, <span class="st">"patient_days_summary.csv"</span>))</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(patient_days_summary, <span class="at">caption =</span> <span class="st">"Patient-days by compartment and bed type (integrated over run)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Patient-days by compartment and bed type (integrated over run)</caption>
+<colgroup>
+<col style="width: 5%">
+<col style="width: 8%">
+<col style="width: 8%">
+<col style="width: 8%">
+<col style="width: 11%">
+<col style="width: 9%">
+<col style="width: 11%">
+<col style="width: 13%">
+<col style="width: 11%">
+<col style="width: 10%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">scenario</th>
+<th style="text-align: right;">S_patient_days</th>
+<th style="text-align: right;">C_patient_days</th>
+<th style="text-align: right;">I_patient_days</th>
+<th style="text-align: right;">Xtest_patient_days</th>
+<th style="text-align: right;">FN_patient_days</th>
+<th style="text-align: right;">Xtreat_patient_days</th>
+<th style="text-align: right;">general_ward_bed_days</th>
+<th style="text-align: right;">side_room_bed_days</th>
+<th style="text-align: right;">hospital_bed_days</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">1664522</td>
+<td style="text-align: right;">116700.2</td>
+<td style="text-align: right;">28977.02</td>
+<td style="text-align: right;">36144.48</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">207458.3</td>
+<td style="text-align: right;">1846343</td>
+<td style="text-align: right;">207458.3</td>
+<td style="text-align: right;">2053802</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">1627203</td>
+<td style="text-align: right;">124863.5</td>
+<td style="text-align: right;">30944.03</td>
+<td style="text-align: right;">54689.69</td>
+<td style="text-align: right;">64292.40</td>
+<td style="text-align: right;">156947.6</td>
+<td style="text-align: right;">1901993</td>
+<td style="text-align: right;">156947.6</td>
+<td style="text-align: right;">2058940</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">1652594</td>
+<td style="text-align: right;">118573.8</td>
+<td style="text-align: right;">52432.99</td>
+<td style="text-align: right;">32701.67</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">187696.3</td>
+<td style="text-align: right;">1856302</td>
+<td style="text-align: right;">187696.3</td>
+<td style="text-align: right;">2043998</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">1618415</td>
+<td style="text-align: right;">125965.6</td>
+<td style="text-align: right;">55606.44</td>
+<td style="text-align: right;">49139.35</td>
+<td style="text-align: right;">57767.35</td>
+<td style="text-align: right;">141018.3</td>
+<td style="text-align: right;">1906894</td>
+<td style="text-align: right;">141018.3</td>
+<td style="text-align: right;">2047912</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="negative-values-checks" class="level2">
+<h2 class="anchored" data-anchor-id="negative-values-checks">7) Negative values checks</h2>
+<p>Check for any negative values in the model states or flows, which may indicate numerical issues with the ODE solver or problems with the model structure. The <code>negative_value_rows</code> function identifies rows in the data frame where any state or flow has a negative value. Save these rows as separate CSV files for each scenario for further investigation.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>neg_tables <span class="ot">&lt;-</span> <span class="fu">lapply</span>(scenario_post, negative_value_rows)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">walk2</span>(neg_tables, <span class="fu">names</span>(neg_tables), <span class="sc">~</span> <span class="fu">write_csv</span>(.x, <span class="fu">file.path</span>(</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  output_dir, <span class="fu">paste0</span>(<span class="st">"negative_rows_"</span>, .y, <span class="st">".csv"</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="stabilisation-summary" class="level2">
+<h2 class="anchored" data-anchor-id="stabilisation-summary">8) Stabilisation summary</h2>
+<p>Identify the day on which each model state and flow stabilises for each scenario using the <code>stabilisation_summary</code> function. This function determines when the values of states and flows reach a steady state (i.e., change by less than a certain threshold over a specified number of days). Combine the stabilisation summaries for all scenarios into a single data frame, save it as a CSV, and display it in a table format.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>stability_all <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stabilisation_summary</span>(scenario_post<span class="sc">$</span>S1, <span class="st">"S1"</span>),</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stabilisation_summary</span>(scenario_post<span class="sc">$</span>S2, <span class="st">"S2"</span>),</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stabilisation_summary</span>(scenario_post<span class="sc">$</span>S3, <span class="st">"S3"</span>),</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stabilisation_summary</span>(scenario_post<span class="sc">$</span>S4, <span class="st">"S4"</span>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>longest_stabilisation <span class="ot">&lt;-</span> <span class="fu">max</span>(stability_all<span class="sc">$</span>stabilisation_day, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(stability_all,</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>          <span class="fu">file.path</span>(output_dir, <span class="st">"stabilisation_summary_states_flows.csv"</span>))</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(stability_all, <span class="at">caption =</span> <span class="st">"Stabilisation: model states and flows"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Stabilisation: model states and flows</caption>
+<colgroup>
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 3%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 3%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 3%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 0%">
+<col style="width: 0%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">scenario</th>
+<th style="text-align: right;">stabilisation_day</th>
+<th style="text-align: right;">tolerance</th>
+<th style="text-align: right;">consecutive_days</th>
+<th style="text-align: left;">stabilised</th>
+<th style="text-align: right;">S</th>
+<th style="text-align: right;">C</th>
+<th style="text-align: right;">I</th>
+<th style="text-align: right;">Xtest</th>
+<th style="text-align: right;">FN</th>
+<th style="text-align: right;">Xtreat</th>
+<th style="text-align: right;">D</th>
+<th style="text-align: right;">hospital_bed_occupancy</th>
+<th style="text-align: right;">general_ward_bed_occupancy</th>
+<th style="text-align: right;">side_room_bed_occupancy</th>
+<th style="text-align: right;">admitted_susceptible_rate</th>
+<th style="text-align: right;">admitted_colonised_rate</th>
+<th style="text-align: right;">admitted_infected_rate</th>
+<th style="text-align: right;">total_admissions_rate</th>
+<th style="text-align: right;">colonised_in_hospital_rate</th>
+<th style="text-align: right;">decolonised_in_hospital_rate</th>
+<th style="text-align: right;">total_colonised_incidence_rate</th>
+<th style="text-align: right;">infected_in_hospital_rate</th>
+<th style="text-align: right;">total_infected_incidence_rate</th>
+<th style="text-align: right;">suspected_cases_rate</th>
+<th style="text-align: right;">confirmed_cases_rate</th>
+<th style="text-align: right;">recovered_cases_rate</th>
+<th style="text-align: right;">first_test_rate</th>
+<th style="text-align: right;">retest_false_negatives_rate</th>
+<th style="text-align: right;">total_test_rate</th>
+<th style="text-align: right;">false_negatives_rate</th>
+<th style="text-align: right;">missed_untested_cases_rate</th>
+<th style="text-align: right;">missed_false_negative_cases_rate</th>
+<th style="text-align: right;">total_missed_cases_rate</th>
+<th style="text-align: right;">discharges_susceptible_rate</th>
+<th style="text-align: right;">discharges_colonised_rate</th>
+<th style="text-align: right;">discharges_infected_rate</th>
+<th style="text-align: right;">discharges_recovered_rate</th>
+<th style="text-align: right;">discharges_while_infected_rate</th>
+<th style="text-align: right;">total_discharges_rate</th>
+<th style="text-align: right;">deaths_susceptible_rate</th>
+<th style="text-align: right;">deaths_colonised_rate</th>
+<th style="text-align: right;">deaths_infected_rate</th>
+<th style="text-align: right;">deaths_suspected_cases_rate</th>
+<th style="text-align: right;">deaths_confirmed_cases_rate</th>
+<th style="text-align: right;">deaths_post_infection_rate</th>
+<th style="text-align: right;">total_deaths_rate</th>
+<th style="text-align: right;">total_exits_rate</th>
+<th style="text-align: right;">N</th>
+<th style="text-align: right;">lambda</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">164.5</td>
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: right;">912.2420</td>
+<td style="text-align: right;">63.89990</td>
+<td style="text-align: right;">15.87955</td>
+<td style="text-align: right;">19.83526</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">114.75625</td>
+<td style="text-align: right;">27.39966</td>
+<td style="text-align: right;">1126.613</td>
+<td style="text-align: right;">1011.857</td>
+<td style="text-align: right;">114.75625</td>
+<td style="text-align: right;">121.296</td>
+<td style="text-align: right;">11.438</td>
+<td style="text-align: right;">0.266</td>
+<td style="text-align: right;">133</td>
+<td style="text-align: right;">6.503582</td>
+<td style="text-align: right;">0.6389990</td>
+<td style="text-align: right;">17.94158</td>
+<td style="text-align: right;">8.773457</td>
+<td style="text-align: right;">9.039457</td>
+<td style="text-align: right;">7.939775</td>
+<td style="text-align: right;">7.934102</td>
+<td style="text-align: right;">7.914224</td>
+<td style="text-align: right;">7.939775</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">7.939775</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">1.099681</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">1.099681</td>
+<td style="text-align: right;">121.6323</td>
+<td style="text-align: right;">8.519987</td>
+<td style="text-align: right;">1.095141</td>
+<td style="text-align: right;">1.582845</td>
+<td style="text-align: right;">1.095141</td>
+<td style="text-align: right;">132.8302</td>
+<td style="text-align: right;">0.1303855</td>
+<td style="text-align: right;">0.0091331</td>
+<td style="text-align: right;">0.0045393</td>
+<td style="text-align: right;">0.0056701</td>
+<td style="text-align: right;">0.0196823</td>
+<td style="text-align: right;">0.0298917</td>
+<td style="text-align: right;">0.1694103</td>
+<td style="text-align: right;">132.9997</td>
+<td style="text-align: right;">1126.613</td>
+<td style="text-align: right;">0.0071292</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">173.0</td>
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: right;">891.6362</td>
+<td style="text-align: right;">68.41334</td>
+<td style="text-align: right;">16.96816</td>
+<td style="text-align: right;">30.09512</td>
+<td style="text-align: right;">35.47133</td>
+<td style="text-align: right;">87.05655</td>
+<td style="text-align: right;">29.78775</td>
+<td style="text-align: right;">1129.641</td>
+<td style="text-align: right;">1042.584</td>
+<td style="text-align: right;">87.05655</td>
+<td style="text-align: right;">121.296</td>
+<td style="text-align: right;">11.438</td>
+<td style="text-align: right;">0.266</td>
+<td style="text-align: right;">133</td>
+<td style="text-align: right;">7.770848</td>
+<td style="text-align: right;">0.6841334</td>
+<td style="text-align: right;">19.20885</td>
+<td style="text-align: right;">9.393152</td>
+<td style="text-align: right;">9.659152</td>
+<td style="text-align: right;">8.484082</td>
+<td style="text-align: right;">6.019025</td>
+<td style="text-align: right;">6.003900</td>
+<td style="text-align: right;">8.484082</td>
+<td style="text-align: right;">5.067333</td>
+<td style="text-align: right;">13.551415</td>
+<td style="text-align: right;">7.523781</td>
+<td style="text-align: right;">1.175069</td>
+<td style="text-align: right;">2.456438</td>
+<td style="text-align: right;">3.631507</td>
+<td style="text-align: right;">118.8848</td>
+<td style="text-align: right;">9.121779</td>
+<td style="text-align: right;">1.170218</td>
+<td style="text-align: right;">1.200780</td>
+<td style="text-align: right;">3.616517</td>
+<td style="text-align: right;">132.8239</td>
+<td style="text-align: right;">0.1274403</td>
+<td style="text-align: right;">0.0097782</td>
+<td style="text-align: right;">0.0048505</td>
+<td style="text-align: right;">0.0086029</td>
+<td style="text-align: right;">0.0149314</td>
+<td style="text-align: right;">0.0385246</td>
+<td style="text-align: right;">0.1757431</td>
+<td style="text-align: right;">132.9996</td>
+<td style="text-align: right;">1129.641</td>
+<td style="text-align: right;">0.0087153</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">165.0</td>
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: right;">905.6676</td>
+<td style="text-align: right;">64.93118</td>
+<td style="text-align: right;">28.75805</td>
+<td style="text-align: right;">17.96094</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">103.91226</td>
+<td style="text-align: right;">27.55951</td>
+<td style="text-align: right;">1121.230</td>
+<td style="text-align: right;">1017.318</td>
+<td style="text-align: right;">103.91226</td>
+<td style="text-align: right;">121.296</td>
+<td style="text-align: right;">11.438</td>
+<td style="text-align: right;">0.266</td>
+<td style="text-align: right;">133</td>
+<td style="text-align: right;">6.793140</td>
+<td style="text-align: right;">0.6493118</td>
+<td style="text-align: right;">18.23114</td>
+<td style="text-align: right;">8.915051</td>
+<td style="text-align: right;">9.181051</td>
+<td style="text-align: right;">7.189514</td>
+<td style="text-align: right;">7.184377</td>
+<td style="text-align: right;">7.166363</td>
+<td style="text-align: right;">7.189514</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">7.189514</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">1.991535</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">1.991535</td>
+<td style="text-align: right;">120.7557</td>
+<td style="text-align: right;">8.657491</td>
+<td style="text-align: right;">1.983314</td>
+<td style="text-align: right;">1.433272</td>
+<td style="text-align: right;">1.983314</td>
+<td style="text-align: right;">132.8298</td>
+<td style="text-align: right;">0.1294458</td>
+<td style="text-align: right;">0.0092805</td>
+<td style="text-align: right;">0.0082207</td>
+<td style="text-align: right;">0.0051343</td>
+<td style="text-align: right;">0.0178224</td>
+<td style="text-align: right;">0.0311774</td>
+<td style="text-align: right;">0.1699037</td>
+<td style="text-align: right;">132.9997</td>
+<td style="text-align: right;">1121.230</td>
+<td style="text-align: right;">0.0075007</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">173.0</td>
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: right;">886.7764</td>
+<td style="text-align: right;">69.02174</td>
+<td style="text-align: right;">30.51728</td>
+<td style="text-align: right;">27.06307</td>
+<td style="text-align: right;">31.89762</td>
+<td style="text-align: right;">78.28536</td>
+<td style="text-align: right;">29.76534</td>
+<td style="text-align: right;">1123.561</td>
+<td style="text-align: right;">1045.276</td>
+<td style="text-align: right;">78.28536</td>
+<td style="text-align: right;">121.296</td>
+<td style="text-align: right;">11.438</td>
+<td style="text-align: right;">0.266</td>
+<td style="text-align: right;">133</td>
+<td style="text-align: right;">7.941673</td>
+<td style="text-align: right;">0.6902174</td>
+<td style="text-align: right;">19.37967</td>
+<td style="text-align: right;">9.476685</td>
+<td style="text-align: right;">9.742685</td>
+<td style="text-align: right;">7.629319</td>
+<td style="text-align: right;">5.412613</td>
+<td style="text-align: right;">5.398990</td>
+<td style="text-align: right;">7.629319</td>
+<td style="text-align: right;">4.556803</td>
+<td style="text-align: right;">12.186122</td>
+<td style="text-align: right;">6.765767</td>
+<td style="text-align: right;">2.113363</td>
+<td style="text-align: right;">2.208954</td>
+<td style="text-align: right;">4.322317</td>
+<td style="text-align: right;">118.2369</td>
+<td style="text-align: right;">9.202899</td>
+<td style="text-align: right;">2.104640</td>
+<td style="text-align: right;">1.079798</td>
+<td style="text-align: right;">4.304476</td>
+<td style="text-align: right;">132.8240</td>
+<td style="text-align: right;">0.1267457</td>
+<td style="text-align: right;">0.0098652</td>
+<td style="text-align: right;">0.0087236</td>
+<td style="text-align: right;">0.0077362</td>
+<td style="text-align: right;">0.0134271</td>
+<td style="text-align: right;">0.0390050</td>
+<td style="text-align: right;">0.1756159</td>
+<td style="text-align: right;">132.9996</td>
+<td style="text-align: right;">1123.561</td>
+<td style="text-align: right;">0.0089557</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="annual-summary-tables" class="level2">
+<h2 class="anchored" data-anchor-id="annual-summary-tables">9) Annual summary tables</h2>
+<p>Create annual summary tables for each scenario using the <code>make_annual_summary</code> function, which calculates annual totals for flow quantities and mean values for model states. Combine the annual summaries for all scenarios into a single data frame, save it as a CSV, and display it in a table format.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>annual_summary_all <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">make_annual_summary</span>(scenario_post<span class="sc">$</span>S1, <span class="st">"S1"</span>),</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">make_annual_summary</span>(scenario_post<span class="sc">$</span>S2, <span class="st">"S2"</span>),</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">make_annual_summary</span>(scenario_post<span class="sc">$</span>S3, <span class="st">"S3"</span>),</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">make_annual_summary</span>(scenario_post<span class="sc">$</span>S4, <span class="st">"S4"</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(annual_summary_all,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>          <span class="fu">file.path</span>(output_dir, <span class="st">"annual_summary_all.csv"</span>))</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(annual_summary_all, <span class="at">caption =</span> <span class="st">"Annual summary (post burn-in period)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Annual summary (post burn-in period)</caption>
+<colgroup>
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 3%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">scenario</th>
+<th style="text-align: right;">year</th>
+<th style="text-align: right;">annual_S_patient_days</th>
+<th style="text-align: right;">annual_C_patient_days</th>
+<th style="text-align: right;">annual_I_patient_days</th>
+<th style="text-align: right;">annual_Xtest_patient_days</th>
+<th style="text-align: right;">annual_FN_patient_days</th>
+<th style="text-align: right;">annual_Xtreat_patient_days</th>
+<th style="text-align: right;">annual_hospital_bed_days</th>
+<th style="text-align: right;">annual_general_ward_bed_days</th>
+<th style="text-align: right;">annual_side_room_bed_days</th>
+<th style="text-align: right;">annual_admitted_susceptible</th>
+<th style="text-align: right;">annual_admitted_colonised</th>
+<th style="text-align: right;">annual_admitted_infected</th>
+<th style="text-align: right;">annual_total_admissions</th>
+<th style="text-align: right;">annual_colonised_in_hospital</th>
+<th style="text-align: right;">annual_decolonised_in_hospital</th>
+<th style="text-align: right;">annual_total_colonised_incidence</th>
+<th style="text-align: right;">annual_infected_in_hospital</th>
+<th style="text-align: right;">annual_total_infected_incidence</th>
+<th style="text-align: right;">annual_suspected_cases</th>
+<th style="text-align: right;">annual_confirmed_cases</th>
+<th style="text-align: right;">annual_recovered_cases</th>
+<th style="text-align: right;">annual_first_test</th>
+<th style="text-align: right;">annual_retest_false_negatives</th>
+<th style="text-align: right;">annual_total_test</th>
+<th style="text-align: right;">annual_false_negatives</th>
+<th style="text-align: right;">annual_missed_untested_cases</th>
+<th style="text-align: right;">annual_missed_false_negative_cases</th>
+<th style="text-align: right;">annual_total_missed_cases</th>
+<th style="text-align: right;">annual_discharges_susceptible</th>
+<th style="text-align: right;">annual_discharges_colonised</th>
+<th style="text-align: right;">annual_discharges_infected</th>
+<th style="text-align: right;">annual_discharges_FN</th>
+<th style="text-align: right;">annual_discharges_recovered</th>
+<th style="text-align: right;">annual_discharges_while_infected</th>
+<th style="text-align: right;">annual_total_discharges</th>
+<th style="text-align: right;">annual_deaths_susceptible</th>
+<th style="text-align: right;">annual_deaths_colonised</th>
+<th style="text-align: right;">annual_deaths_infected</th>
+<th style="text-align: right;">annual_deaths_suspected_cases</th>
+<th style="text-align: right;">annual_deaths_FN</th>
+<th style="text-align: right;">annual_deaths_confirmed_cases</th>
+<th style="text-align: right;">annual_deaths_post_infection</th>
+<th style="text-align: right;">annual_total_deaths</th>
+<th style="text-align: right;">annual_total_exits</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">332645.1</td>
+<td style="text-align: right;">23406.23</td>
+<td style="text-align: right;">5792.839</td>
+<td style="text-align: right;">7184.951</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">39909.76</td>
+<td style="text-align: right;">408938.9</td>
+<td style="text-align: right;">369029.1</td>
+<td style="text-align: right;">39909.76</td>
+<td style="text-align: right;">44333.69</td>
+<td style="text-align: right;">4180.589</td>
+<td style="text-align: right;">97.223</td>
+<td style="text-align: right;">48611.5</td>
+<td style="text-align: right;">2367.335</td>
+<td style="text-align: right;">234.0623</td>
+<td style="text-align: right;">6547.924</td>
+<td style="text-align: right;">3213.675</td>
+<td style="text-align: right;">3310.898</td>
+<td style="text-align: right;">2896.420</td>
+<td style="text-align: right;">2873.980</td>
+<td style="text-align: right;">2752.397</td>
+<td style="text-align: right;">2896.420</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2896.420</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">401.1621</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">401.1621</td>
+<td style="text-align: right;">44352.68</td>
+<td style="text-align: right;">3120.831</td>
+<td style="text-align: right;">399.5061</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">550.4794</td>
+<td style="text-align: right;">399.5061</td>
+<td style="text-align: right;">48423.50</td>
+<td style="text-align: right;">47.54450</td>
+<td style="text-align: right;">3.345420</td>
+<td style="text-align: right;">1.655925</td>
+<td style="text-align: right;">2.053870</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">6.845095</td>
+<td style="text-align: right;">10.55489</td>
+<td style="text-align: right;">61.44481</td>
+<td style="text-align: right;">48484.94</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">332969.1</td>
+<td style="text-align: right;">23323.50</td>
+<td style="text-align: right;">5796.044</td>
+<td style="text-align: right;">7239.881</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">411215.7</td>
+<td style="text-align: right;">369328.6</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2373.814</td>
+<td style="text-align: right;">233.2350</td>
+<td style="text-align: right;">6548.684</td>
+<td style="text-align: right;">3202.316</td>
+<td style="text-align: right;">3299.406</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">2895.952</td>
+<td style="text-align: right;">2888.768</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">44395.88</td>
+<td style="text-align: right;">3109.800</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">577.7536</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">48483.16</td>
+<td style="text-align: right;">47.59082</td>
+<td style="text-align: right;">3.333595</td>
+<td style="text-align: right;">1.656841</td>
+<td style="text-align: right;">2.069572</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">7.184245</td>
+<td style="text-align: right;">10.91066</td>
+<td style="text-align: right;">61.83507</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">332969.1</td>
+<td style="text-align: right;">23323.50</td>
+<td style="text-align: right;">5796.044</td>
+<td style="text-align: right;">7239.881</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">411215.7</td>
+<td style="text-align: right;">369328.6</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2373.814</td>
+<td style="text-align: right;">233.2350</td>
+<td style="text-align: right;">6548.684</td>
+<td style="text-align: right;">3202.316</td>
+<td style="text-align: right;">3299.406</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">2895.952</td>
+<td style="text-align: right;">2888.768</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">44395.88</td>
+<td style="text-align: right;">3109.800</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">577.7536</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">48483.16</td>
+<td style="text-align: right;">47.59082</td>
+<td style="text-align: right;">3.333595</td>
+<td style="text-align: right;">1.656841</td>
+<td style="text-align: right;">2.069572</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">7.184245</td>
+<td style="text-align: right;">10.91066</td>
+<td style="text-align: right;">61.83507</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">332969.1</td>
+<td style="text-align: right;">23323.50</td>
+<td style="text-align: right;">5796.044</td>
+<td style="text-align: right;">7239.881</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">411215.7</td>
+<td style="text-align: right;">369328.6</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2373.814</td>
+<td style="text-align: right;">233.2350</td>
+<td style="text-align: right;">6548.684</td>
+<td style="text-align: right;">3202.316</td>
+<td style="text-align: right;">3299.406</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">2895.952</td>
+<td style="text-align: right;">2888.768</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">44395.88</td>
+<td style="text-align: right;">3109.800</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">577.7536</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">48483.16</td>
+<td style="text-align: right;">47.59082</td>
+<td style="text-align: right;">3.333595</td>
+<td style="text-align: right;">1.656841</td>
+<td style="text-align: right;">2.069572</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">7.184245</td>
+<td style="text-align: right;">10.91066</td>
+<td style="text-align: right;">61.83507</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">332969.1</td>
+<td style="text-align: right;">23323.50</td>
+<td style="text-align: right;">5796.044</td>
+<td style="text-align: right;">7239.881</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">411215.7</td>
+<td style="text-align: right;">369328.6</td>
+<td style="text-align: right;">41887.14</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2373.814</td>
+<td style="text-align: right;">233.2350</td>
+<td style="text-align: right;">6548.684</td>
+<td style="text-align: right;">3202.316</td>
+<td style="text-align: right;">3299.406</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">2895.952</td>
+<td style="text-align: right;">2888.768</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2898.022</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">401.3840</td>
+<td style="text-align: right;">44395.88</td>
+<td style="text-align: right;">3109.800</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">577.7536</td>
+<td style="text-align: right;">399.7272</td>
+<td style="text-align: right;">48483.16</td>
+<td style="text-align: right;">47.59082</td>
+<td style="text-align: right;">3.333595</td>
+<td style="text-align: right;">1.656841</td>
+<td style="text-align: right;">2.069572</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">7.184245</td>
+<td style="text-align: right;">10.91066</td>
+<td style="text-align: right;">61.83507</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">325411.2</td>
+<td style="text-align: right;">24979.85</td>
+<td style="text-align: right;">6170.474</td>
+<td style="text-align: right;">10750.681</td>
+<td style="text-align: right;">12504.03</td>
+<td style="text-align: right;">29840.55</td>
+<td style="text-align: right;">409656.8</td>
+<td style="text-align: right;">379816.3</td>
+<td style="text-align: right;">29840.55</td>
+<td style="text-align: right;">44333.69</td>
+<td style="text-align: right;">4180.589</td>
+<td style="text-align: right;">97.223</td>
+<td style="text-align: right;">48611.5</td>
+<td style="text-align: right;">2813.684</td>
+<td style="text-align: right;">249.7985</td>
+<td style="text-align: right;">6994.273</td>
+<td style="text-align: right;">3429.733</td>
+<td style="text-align: right;">3526.956</td>
+<td style="text-align: right;">3085.237</td>
+<td style="text-align: right;">2150.136</td>
+<td style="text-align: right;">2057.969</td>
+<td style="text-align: right;">3085.237</td>
+<td style="text-align: right;">1786.290</td>
+<td style="text-align: right;">4871.527</td>
+<td style="text-align: right;">2687.670</td>
+<td style="text-align: right;">427.3138</td>
+<td style="text-align: right;">865.9215</td>
+<td style="text-align: right;">1293.2353</td>
+<td style="text-align: right;">43388.16</td>
+<td style="text-align: right;">3330.646</td>
+<td style="text-align: right;">425.5499</td>
+<td style="text-align: right;">862.3471</td>
+<td style="text-align: right;">411.5938</td>
+<td style="text-align: right;">1287.8970</td>
+<td style="text-align: right;">48418.30</td>
+<td style="text-align: right;">46.51058</td>
+<td style="text-align: right;">3.570335</td>
+<td style="text-align: right;">1.763875</td>
+<td style="text-align: right;">3.073160</td>
+<td style="text-align: right;">3.574368</td>
+<td style="text-align: right;">5.118082</td>
+<td style="text-align: right;">13.52949</td>
+<td style="text-align: right;">63.61040</td>
+<td style="text-align: right;">48481.91</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">325448.0</td>
+<td style="text-align: right;">24970.90</td>
+<td style="text-align: right;">6193.389</td>
+<td style="text-align: right;">10984.753</td>
+<td style="text-align: right;">12947.09</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">412320.9</td>
+<td style="text-align: right;">380544.1</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2836.367</td>
+<td style="text-align: right;">249.7090</td>
+<td style="text-align: right;">7011.237</td>
+<td style="text-align: right;">3428.505</td>
+<td style="text-align: right;">3525.595</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">2196.951</td>
+<td style="text-align: right;">2191.500</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">1849.584</td>
+<td style="text-align: right;">4946.279</td>
+<td style="text-align: right;">2746.188</td>
+<td style="text-align: right;">428.9007</td>
+<td style="text-align: right;">896.6038</td>
+<td style="text-align: right;">1325.5045</td>
+<td style="text-align: right;">43393.07</td>
+<td style="text-align: right;">3329.454</td>
+<td style="text-align: right;">427.1303</td>
+<td style="text-align: right;">892.9028</td>
+<td style="text-align: right;">438.3001</td>
+<td style="text-align: right;">1320.0331</td>
+<td style="text-align: right;">48480.85</td>
+<td style="text-align: right;">46.51583</td>
+<td style="text-align: right;">3.569057</td>
+<td style="text-align: right;">1.770425</td>
+<td style="text-align: right;">3.140071</td>
+<td style="text-align: right;">3.701020</td>
+<td style="text-align: right;">5.450170</td>
+<td style="text-align: right;">14.06169</td>
+<td style="text-align: right;">64.14658</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">325448.0</td>
+<td style="text-align: right;">24970.90</td>
+<td style="text-align: right;">6193.389</td>
+<td style="text-align: right;">10984.753</td>
+<td style="text-align: right;">12947.09</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">412320.9</td>
+<td style="text-align: right;">380544.1</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2836.367</td>
+<td style="text-align: right;">249.7090</td>
+<td style="text-align: right;">7011.237</td>
+<td style="text-align: right;">3428.505</td>
+<td style="text-align: right;">3525.595</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">2196.951</td>
+<td style="text-align: right;">2191.500</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">1849.584</td>
+<td style="text-align: right;">4946.279</td>
+<td style="text-align: right;">2746.188</td>
+<td style="text-align: right;">428.9007</td>
+<td style="text-align: right;">896.6038</td>
+<td style="text-align: right;">1325.5045</td>
+<td style="text-align: right;">43393.07</td>
+<td style="text-align: right;">3329.454</td>
+<td style="text-align: right;">427.1303</td>
+<td style="text-align: right;">892.9028</td>
+<td style="text-align: right;">438.3001</td>
+<td style="text-align: right;">1320.0331</td>
+<td style="text-align: right;">48480.85</td>
+<td style="text-align: right;">46.51583</td>
+<td style="text-align: right;">3.569057</td>
+<td style="text-align: right;">1.770425</td>
+<td style="text-align: right;">3.140071</td>
+<td style="text-align: right;">3.701020</td>
+<td style="text-align: right;">5.450170</td>
+<td style="text-align: right;">14.06169</td>
+<td style="text-align: right;">64.14658</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">325448.0</td>
+<td style="text-align: right;">24970.90</td>
+<td style="text-align: right;">6193.389</td>
+<td style="text-align: right;">10984.753</td>
+<td style="text-align: right;">12947.09</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">412320.9</td>
+<td style="text-align: right;">380544.1</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2836.367</td>
+<td style="text-align: right;">249.7090</td>
+<td style="text-align: right;">7011.237</td>
+<td style="text-align: right;">3428.505</td>
+<td style="text-align: right;">3525.595</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">2196.951</td>
+<td style="text-align: right;">2191.500</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">1849.584</td>
+<td style="text-align: right;">4946.279</td>
+<td style="text-align: right;">2746.188</td>
+<td style="text-align: right;">428.9007</td>
+<td style="text-align: right;">896.6038</td>
+<td style="text-align: right;">1325.5045</td>
+<td style="text-align: right;">43393.07</td>
+<td style="text-align: right;">3329.454</td>
+<td style="text-align: right;">427.1303</td>
+<td style="text-align: right;">892.9028</td>
+<td style="text-align: right;">438.3001</td>
+<td style="text-align: right;">1320.0331</td>
+<td style="text-align: right;">48480.85</td>
+<td style="text-align: right;">46.51583</td>
+<td style="text-align: right;">3.569057</td>
+<td style="text-align: right;">1.770425</td>
+<td style="text-align: right;">3.140071</td>
+<td style="text-align: right;">3.701020</td>
+<td style="text-align: right;">5.450170</td>
+<td style="text-align: right;">14.06169</td>
+<td style="text-align: right;">64.14658</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">325448.0</td>
+<td style="text-align: right;">24970.90</td>
+<td style="text-align: right;">6193.389</td>
+<td style="text-align: right;">10984.753</td>
+<td style="text-align: right;">12947.09</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">412320.9</td>
+<td style="text-align: right;">380544.1</td>
+<td style="text-align: right;">31776.76</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2836.367</td>
+<td style="text-align: right;">249.7090</td>
+<td style="text-align: right;">7011.237</td>
+<td style="text-align: right;">3428.505</td>
+<td style="text-align: right;">3525.595</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">2196.951</td>
+<td style="text-align: right;">2191.500</td>
+<td style="text-align: right;">3096.695</td>
+<td style="text-align: right;">1849.584</td>
+<td style="text-align: right;">4946.279</td>
+<td style="text-align: right;">2746.188</td>
+<td style="text-align: right;">428.9007</td>
+<td style="text-align: right;">896.6038</td>
+<td style="text-align: right;">1325.5045</td>
+<td style="text-align: right;">43393.07</td>
+<td style="text-align: right;">3329.454</td>
+<td style="text-align: right;">427.1303</td>
+<td style="text-align: right;">892.9028</td>
+<td style="text-align: right;">438.3001</td>
+<td style="text-align: right;">1320.0331</td>
+<td style="text-align: right;">48480.85</td>
+<td style="text-align: right;">46.51583</td>
+<td style="text-align: right;">3.569057</td>
+<td style="text-align: right;">1.770425</td>
+<td style="text-align: right;">3.140071</td>
+<td style="text-align: right;">3.701020</td>
+<td style="text-align: right;">5.450170</td>
+<td style="text-align: right;">14.06169</td>
+<td style="text-align: right;">64.14658</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">330315.8</td>
+<td style="text-align: right;">23774.20</td>
+<td style="text-align: right;">10446.164</td>
+<td style="text-align: right;">6478.649</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">35980.06</td>
+<td style="text-align: right;">406994.9</td>
+<td style="text-align: right;">371014.8</td>
+<td style="text-align: right;">35980.06</td>
+<td style="text-align: right;">44333.69</td>
+<td style="text-align: right;">4180.589</td>
+<td style="text-align: right;">97.223</td>
+<td style="text-align: right;">48611.5</td>
+<td style="text-align: right;">2471.683</td>
+<td style="text-align: right;">237.7420</td>
+<td style="text-align: right;">6652.272</td>
+<td style="text-align: right;">3264.197</td>
+<td style="text-align: right;">3361.420</td>
+<td style="text-align: right;">2611.541</td>
+<td style="text-align: right;">2591.459</td>
+<td style="text-align: right;">2481.384</td>
+<td style="text-align: right;">2611.541</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2611.541</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">723.4112</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">723.4112</td>
+<td style="text-align: right;">44042.11</td>
+<td style="text-align: right;">3169.893</td>
+<td style="text-align: right;">720.4251</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">496.2767</td>
+<td style="text-align: right;">720.4251</td>
+<td style="text-align: right;">48428.70</td>
+<td style="text-align: right;">47.21158</td>
+<td style="text-align: right;">3.398013</td>
+<td style="text-align: right;">2.986111</td>
+<td style="text-align: right;">1.851969</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">6.171097</td>
+<td style="text-align: right;">11.00918</td>
+<td style="text-align: right;">61.61877</td>
+<td style="text-align: right;">48490.32</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">330569.4</td>
+<td style="text-align: right;">23699.91</td>
+<td style="text-align: right;">10496.706</td>
+<td style="text-align: right;">6555.756</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">409250.9</td>
+<td style="text-align: right;">371321.8</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2479.503</td>
+<td style="text-align: right;">236.9991</td>
+<td style="text-align: right;">6654.373</td>
+<td style="text-align: right;">3253.998</td>
+<td style="text-align: right;">3351.088</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">2622.303</td>
+<td style="text-align: right;">2615.797</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">44075.93</td>
+<td style="text-align: right;">3159.988</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">523.1594</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">48482.98</td>
+<td style="text-align: right;">47.24783</td>
+<td style="text-align: right;">3.387396</td>
+<td style="text-align: right;">3.000559</td>
+<td style="text-align: right;">1.874010</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">6.505377</td>
+<td style="text-align: right;">11.37995</td>
+<td style="text-align: right;">62.01518</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">330569.4</td>
+<td style="text-align: right;">23699.91</td>
+<td style="text-align: right;">10496.706</td>
+<td style="text-align: right;">6555.756</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">409250.9</td>
+<td style="text-align: right;">371321.8</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2479.503</td>
+<td style="text-align: right;">236.9991</td>
+<td style="text-align: right;">6654.373</td>
+<td style="text-align: right;">3253.998</td>
+<td style="text-align: right;">3351.088</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">2622.303</td>
+<td style="text-align: right;">2615.797</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">44075.93</td>
+<td style="text-align: right;">3159.988</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">523.1594</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">48482.98</td>
+<td style="text-align: right;">47.24783</td>
+<td style="text-align: right;">3.387396</td>
+<td style="text-align: right;">3.000559</td>
+<td style="text-align: right;">1.874010</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">6.505377</td>
+<td style="text-align: right;">11.37995</td>
+<td style="text-align: right;">62.01518</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">330569.4</td>
+<td style="text-align: right;">23699.91</td>
+<td style="text-align: right;">10496.706</td>
+<td style="text-align: right;">6555.756</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">409250.9</td>
+<td style="text-align: right;">371321.8</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2479.503</td>
+<td style="text-align: right;">236.9991</td>
+<td style="text-align: right;">6654.373</td>
+<td style="text-align: right;">3253.998</td>
+<td style="text-align: right;">3351.088</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">2622.303</td>
+<td style="text-align: right;">2615.797</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">44075.93</td>
+<td style="text-align: right;">3159.988</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">523.1594</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">48482.98</td>
+<td style="text-align: right;">47.24783</td>
+<td style="text-align: right;">3.387396</td>
+<td style="text-align: right;">3.000559</td>
+<td style="text-align: right;">1.874010</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">6.505377</td>
+<td style="text-align: right;">11.37995</td>
+<td style="text-align: right;">62.01518</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">330569.4</td>
+<td style="text-align: right;">23699.91</td>
+<td style="text-align: right;">10496.706</td>
+<td style="text-align: right;">6555.756</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">409250.9</td>
+<td style="text-align: right;">371321.8</td>
+<td style="text-align: right;">37929.06</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2479.503</td>
+<td style="text-align: right;">236.9991</td>
+<td style="text-align: right;">6654.373</td>
+<td style="text-align: right;">3253.998</td>
+<td style="text-align: right;">3351.088</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">2622.303</td>
+<td style="text-align: right;">2615.797</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2624.177</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">726.9113</td>
+<td style="text-align: right;">44075.93</td>
+<td style="text-align: right;">3159.988</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">523.1594</td>
+<td style="text-align: right;">723.9108</td>
+<td style="text-align: right;">48482.98</td>
+<td style="text-align: right;">47.24783</td>
+<td style="text-align: right;">3.387396</td>
+<td style="text-align: right;">3.000559</td>
+<td style="text-align: right;">1.874010</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">6.505377</td>
+<td style="text-align: right;">11.37995</td>
+<td style="text-align: right;">62.01518</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">323718.2</td>
+<td style="text-align: right;">25193.71</td>
+<td style="text-align: right;">11051.140</td>
+<td style="text-align: right;">9627.144</td>
+<td style="text-align: right;">11196.60</td>
+<td style="text-align: right;">26717.17</td>
+<td style="text-align: right;">407503.9</td>
+<td style="text-align: right;">380786.8</td>
+<td style="text-align: right;">26717.17</td>
+<td style="text-align: right;">44333.69</td>
+<td style="text-align: right;">4180.589</td>
+<td style="text-align: right;">97.223</td>
+<td style="text-align: right;">48611.5</td>
+<td style="text-align: right;">2874.338</td>
+<td style="text-align: right;">251.9371</td>
+<td style="text-align: right;">7054.927</td>
+<td style="text-align: right;">3459.096</td>
+<td style="text-align: right;">3556.319</td>
+<td style="text-align: right;">2762.785</td>
+<td style="text-align: right;">1925.429</td>
+<td style="text-align: right;">1842.563</td>
+<td style="text-align: right;">2762.785</td>
+<td style="text-align: right;">1599.515</td>
+<td style="text-align: right;">4362.300</td>
+<td style="text-align: right;">2406.786</td>
+<td style="text-align: right;">765.3066</td>
+<td style="text-align: right;">775.3801</td>
+<td style="text-align: right;">1540.6867</td>
+<td style="text-align: right;">43162.43</td>
+<td style="text-align: right;">3359.161</td>
+<td style="text-align: right;">762.1476</td>
+<td style="text-align: right;">772.1795</td>
+<td style="text-align: right;">368.5126</td>
+<td style="text-align: right;">1534.3270</td>
+<td style="text-align: right;">48424.43</td>
+<td style="text-align: right;">46.26859</td>
+<td style="text-align: right;">3.600902</td>
+<td style="text-align: right;">3.159048</td>
+<td style="text-align: right;">2.751989</td>
+<td style="text-align: right;">3.200630</td>
+<td style="text-align: right;">4.582377</td>
+<td style="text-align: right;">13.69404</td>
+<td style="text-align: right;">63.56354</td>
+<td style="text-align: right;">48487.99</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">323674.2</td>
+<td style="text-align: right;">25192.97</td>
+<td style="text-align: right;">11138.825</td>
+<td style="text-align: right;">9878.052</td>
+<td style="text-align: right;">11642.69</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">410102.0</td>
+<td style="text-align: right;">381526.7</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2898.719</td>
+<td style="text-align: right;">251.9297</td>
+<td style="text-align: right;">7073.589</td>
+<td style="text-align: right;">3458.995</td>
+<td style="text-align: right;">3556.085</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1975.610</td>
+<td style="text-align: right;">1970.709</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1663.241</td>
+<td style="text-align: right;">4447.947</td>
+<td style="text-align: right;">2469.513</td>
+<td style="text-align: right;">771.3789</td>
+<td style="text-align: right;">806.2720</td>
+<td style="text-align: right;">1577.6510</td>
+<td style="text-align: right;">43156.56</td>
+<td style="text-align: right;">3359.063</td>
+<td style="text-align: right;">768.1948</td>
+<td style="text-align: right;">802.9439</td>
+<td style="text-align: right;">394.1419</td>
+<td style="text-align: right;">1571.1387</td>
+<td style="text-align: right;">48480.90</td>
+<td style="text-align: right;">46.26230</td>
+<td style="text-align: right;">3.600797</td>
+<td style="text-align: right;">3.184114</td>
+<td style="text-align: right;">2.823713</td>
+<td style="text-align: right;">3.328146</td>
+<td style="text-align: right;">4.901071</td>
+<td style="text-align: right;">14.23704</td>
+<td style="text-align: right;">64.10014</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">323674.2</td>
+<td style="text-align: right;">25192.97</td>
+<td style="text-align: right;">11138.825</td>
+<td style="text-align: right;">9878.052</td>
+<td style="text-align: right;">11642.69</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">410102.0</td>
+<td style="text-align: right;">381526.7</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2898.719</td>
+<td style="text-align: right;">251.9297</td>
+<td style="text-align: right;">7073.589</td>
+<td style="text-align: right;">3458.995</td>
+<td style="text-align: right;">3556.085</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1975.610</td>
+<td style="text-align: right;">1970.709</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1663.241</td>
+<td style="text-align: right;">4447.947</td>
+<td style="text-align: right;">2469.513</td>
+<td style="text-align: right;">771.3789</td>
+<td style="text-align: right;">806.2720</td>
+<td style="text-align: right;">1577.6510</td>
+<td style="text-align: right;">43156.56</td>
+<td style="text-align: right;">3359.063</td>
+<td style="text-align: right;">768.1948</td>
+<td style="text-align: right;">802.9439</td>
+<td style="text-align: right;">394.1419</td>
+<td style="text-align: right;">1571.1387</td>
+<td style="text-align: right;">48480.90</td>
+<td style="text-align: right;">46.26230</td>
+<td style="text-align: right;">3.600797</td>
+<td style="text-align: right;">3.184114</td>
+<td style="text-align: right;">2.823713</td>
+<td style="text-align: right;">3.328146</td>
+<td style="text-align: right;">4.901071</td>
+<td style="text-align: right;">14.23704</td>
+<td style="text-align: right;">64.10014</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">323674.2</td>
+<td style="text-align: right;">25192.97</td>
+<td style="text-align: right;">11138.825</td>
+<td style="text-align: right;">9878.052</td>
+<td style="text-align: right;">11642.69</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">410102.0</td>
+<td style="text-align: right;">381526.7</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2898.719</td>
+<td style="text-align: right;">251.9297</td>
+<td style="text-align: right;">7073.589</td>
+<td style="text-align: right;">3458.995</td>
+<td style="text-align: right;">3556.085</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1975.610</td>
+<td style="text-align: right;">1970.709</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1663.241</td>
+<td style="text-align: right;">4447.947</td>
+<td style="text-align: right;">2469.513</td>
+<td style="text-align: right;">771.3789</td>
+<td style="text-align: right;">806.2720</td>
+<td style="text-align: right;">1577.6510</td>
+<td style="text-align: right;">43156.56</td>
+<td style="text-align: right;">3359.063</td>
+<td style="text-align: right;">768.1948</td>
+<td style="text-align: right;">802.9439</td>
+<td style="text-align: right;">394.1419</td>
+<td style="text-align: right;">1571.1387</td>
+<td style="text-align: right;">48480.90</td>
+<td style="text-align: right;">46.26230</td>
+<td style="text-align: right;">3.600797</td>
+<td style="text-align: right;">3.184114</td>
+<td style="text-align: right;">2.823713</td>
+<td style="text-align: right;">3.328146</td>
+<td style="text-align: right;">4.901071</td>
+<td style="text-align: right;">14.23704</td>
+<td style="text-align: right;">64.10014</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">323674.2</td>
+<td style="text-align: right;">25192.97</td>
+<td style="text-align: right;">11138.825</td>
+<td style="text-align: right;">9878.052</td>
+<td style="text-align: right;">11642.69</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">410102.0</td>
+<td style="text-align: right;">381526.7</td>
+<td style="text-align: right;">28575.29</td>
+<td style="text-align: right;">44273.04</td>
+<td style="text-align: right;">4174.870</td>
+<td style="text-align: right;">97.090</td>
+<td style="text-align: right;">48545.0</td>
+<td style="text-align: right;">2898.719</td>
+<td style="text-align: right;">251.9297</td>
+<td style="text-align: right;">7073.589</td>
+<td style="text-align: right;">3458.995</td>
+<td style="text-align: right;">3556.085</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1975.610</td>
+<td style="text-align: right;">1970.709</td>
+<td style="text-align: right;">2784.706</td>
+<td style="text-align: right;">1663.241</td>
+<td style="text-align: right;">4447.947</td>
+<td style="text-align: right;">2469.513</td>
+<td style="text-align: right;">771.3789</td>
+<td style="text-align: right;">806.2720</td>
+<td style="text-align: right;">1577.6510</td>
+<td style="text-align: right;">43156.56</td>
+<td style="text-align: right;">3359.063</td>
+<td style="text-align: right;">768.1948</td>
+<td style="text-align: right;">802.9439</td>
+<td style="text-align: right;">394.1419</td>
+<td style="text-align: right;">1571.1387</td>
+<td style="text-align: right;">48480.90</td>
+<td style="text-align: right;">46.26230</td>
+<td style="text-align: right;">3.600797</td>
+<td style="text-align: right;">3.184114</td>
+<td style="text-align: right;">2.823713</td>
+<td style="text-align: right;">3.328146</td>
+<td style="text-align: right;">4.901071</td>
+<td style="text-align: right;">14.23704</td>
+<td style="text-align: right;">64.10014</td>
+<td style="text-align: right;">48545.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="final-cumulative-outcomes-table" class="level2">
+<h2 class="anchored" data-anchor-id="final-cumulative-outcomes-table">10) Final cumulative outcomes table</h2>
+<p>Create a table of final cumulative outcomes for each scenario using the <code>make_final_outcomes</code> function, which extracts the end states and cumulative flows at the end of the model run. Then, create a table comparing the final outcomes of each scenario to the base scenario (S1) using the <code>make_final_outcomes_vs_base</code> function. Save both tables as CSV files and display them in table format.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>final_outcomes         <span class="ot">&lt;-</span> <span class="fu">make_final_outcomes</span>(scenario_post)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>final_outcomes_vs_base <span class="ot">&lt;-</span> <span class="fu">make_final_outcomes_vs_base</span>(final_outcomes, <span class="at">base_scenario =</span> <span class="st">"S1"</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(final_outcomes,</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>          <span class="fu">file.path</span>(output_dir, <span class="st">"final_outcomes_all.csv"</span>))</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(final_outcomes_vs_base,</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>          <span class="fu">file.path</span>(output_dir, <span class="st">"final_outcomes_vs_base.csv"</span>))</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(final_outcomes, <span class="at">caption =</span> <span class="st">"Model end states and cumulative flows"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Model end states and cumulative flows</caption>
+<colgroup>
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">scenario</th>
+<th style="text-align: right;">final_S</th>
+<th style="text-align: right;">final_C</th>
+<th style="text-align: right;">final_I</th>
+<th style="text-align: right;">final_Xtest</th>
+<th style="text-align: right;">final_FN</th>
+<th style="text-align: right;">final_Xtreat</th>
+<th style="text-align: right;">final_D</th>
+<th style="text-align: right;">final_lambda</th>
+<th style="text-align: right;">final_hospital_bed_occupancy</th>
+<th style="text-align: right;">final_general_ward_bed_occupancy</th>
+<th style="text-align: right;">final_side_room_bed_occupancy</th>
+<th style="text-align: right;">cum_admitted_susceptible</th>
+<th style="text-align: right;">cum_admitted_colonised</th>
+<th style="text-align: right;">cum_admitted_infected</th>
+<th style="text-align: right;">cum_total_admissions</th>
+<th style="text-align: right;">cum_colonised_in_hospital</th>
+<th style="text-align: right;">cum_decolonised_in_hospital</th>
+<th style="text-align: right;">cum_total_colonised_incidence</th>
+<th style="text-align: right;">cum_infected_in_hospital</th>
+<th style="text-align: right;">cum_total_infected_incidence</th>
+<th style="text-align: right;">cum_suspected_cases</th>
+<th style="text-align: right;">cum_confirmed_cases</th>
+<th style="text-align: right;">cum_recovered_cases</th>
+<th style="text-align: right;">cum_first_test</th>
+<th style="text-align: right;">cum_retest_false_negatives</th>
+<th style="text-align: right;">cum_total_test</th>
+<th style="text-align: right;">cum_false_negatives</th>
+<th style="text-align: right;">cum_missed_untested_cases</th>
+<th style="text-align: right;">cum_missed_false_negative_cases</th>
+<th style="text-align: right;">cum_total_missed_cases</th>
+<th style="text-align: right;">cum_confirmed_via_first_test</th>
+<th style="text-align: right;">cum_confirmed_via_retest</th>
+<th style="text-align: right;">prop_C_hospital_acquired</th>
+<th style="text-align: right;">cum_hospital_attributable_I</th>
+<th style="text-align: right;">prop_I_hospital_attributable</th>
+<th style="text-align: right;">cum_discharges_susceptible</th>
+<th style="text-align: right;">cum_discharges_colonised</th>
+<th style="text-align: right;">cum_discharges_infected</th>
+<th style="text-align: right;">cum_discharges_FN</th>
+<th style="text-align: right;">cum_discharges_recovered</th>
+<th style="text-align: right;">cum_discharges_while_infected</th>
+<th style="text-align: right;">cum_total_discharges</th>
+<th style="text-align: right;">cum_deaths_susceptible</th>
+<th style="text-align: right;">cum_deaths_colonised</th>
+<th style="text-align: right;">cum_deaths_infected</th>
+<th style="text-align: right;">cum_deaths_suspected_cases</th>
+<th style="text-align: right;">cum_deaths_FN</th>
+<th style="text-align: right;">cum_deaths_confirmed_cases</th>
+<th style="text-align: right;">cum_deaths_post_infection</th>
+<th style="text-align: right;">cum_total_deaths</th>
+<th style="text-align: right;">cum_total_exits</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">912.2442</td>
+<td style="text-align: right;">63.89999</td>
+<td style="text-align: right;">15.87957</td>
+<td style="text-align: right;">19.83529</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">114.75929</td>
+<td style="text-align: right;">308.7069</td>
+<td style="text-align: right;">0.0071292</td>
+<td style="text-align: right;">1126.618</td>
+<td style="text-align: right;">1011.859</td>
+<td style="text-align: right;">114.75929</td>
+<td style="text-align: right;">221425.8</td>
+<td style="text-align: right;">20880.07</td>
+<td style="text-align: right;">485.583</td>
+<td style="text-align: right;">242791.5</td>
+<td style="text-align: right;">11862.59</td>
+<td style="text-align: right;">1167.002</td>
+<td style="text-align: right;">32742.66</td>
+<td style="text-align: right;">16022.94</td>
+<td style="text-align: right;">16508.52</td>
+<td style="text-align: right;">14488.51</td>
+<td style="text-align: right;">14457.79</td>
+<td style="text-align: right;">14307.47</td>
+<td style="text-align: right;">14488.51</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">14488.51</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">2006.698</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2006.698</td>
+<td style="text-align: right;">14457.790</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.3622977</td>
+<td style="text-align: right;">5805.075</td>
+<td style="text-align: right;">0.3516411</td>
+<td style="text-align: right;">221936.2</td>
+<td style="text-align: right;">15560.03</td>
+<td style="text-align: right;">1998.415</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2861.494</td>
+<td style="text-align: right;">1998.415</td>
+<td style="text-align: right;">242356.2</td>
+<td style="text-align: right;">237.9078</td>
+<td style="text-align: right;">16.67980</td>
+<td style="text-align: right;">8.283290</td>
+<td style="text-align: right;">10.33216</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">35.58208</td>
+<td style="text-align: right;">54.19753</td>
+<td style="text-align: right;">308.7851</td>
+<td style="text-align: right;">242664.9</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">891.6383</td>
+<td style="text-align: right;">68.41344</td>
+<td style="text-align: right;">16.96819</td>
+<td style="text-align: right;">30.09521</td>
+<td style="text-align: right;">35.47148</td>
+<td style="text-align: right;">87.05961</td>
+<td style="text-align: right;">320.1169</td>
+<td style="text-align: right;">0.0087153</td>
+<td style="text-align: right;">1129.646</td>
+<td style="text-align: right;">1042.587</td>
+<td style="text-align: right;">87.05961</td>
+<td style="text-align: right;">221425.8</td>
+<td style="text-align: right;">20880.07</td>
+<td style="text-align: right;">485.583</td>
+<td style="text-align: right;">242791.5</td>
+<td style="text-align: right;">14159.15</td>
+<td style="text-align: right;">1248.635</td>
+<td style="text-align: right;">35039.22</td>
+<td style="text-align: right;">17143.75</td>
+<td style="text-align: right;">17629.34</td>
+<td style="text-align: right;">15472.02</td>
+<td style="text-align: right;">10937.94</td>
+<td style="text-align: right;">10823.97</td>
+<td style="text-align: right;">15472.02</td>
+<td style="text-align: right;">9184.628</td>
+<td style="text-align: right;">24656.64</td>
+<td style="text-align: right;">13672.42</td>
+<td style="text-align: right;">2142.917</td>
+<td style="text-align: right;">4452.337</td>
+<td style="text-align: right;">6595.253</td>
+<td style="text-align: right;">6863.544</td>
+<td style="text-align: right;">4074.395</td>
+<td style="text-align: right;">0.4040944</td>
+<td style="text-align: right;">6927.695</td>
+<td style="text-align: right;">0.3929640</td>
+<td style="text-align: right;">216960.4</td>
+<td style="text-align: right;">16648.46</td>
+<td style="text-align: right;">2134.071</td>
+<td style="text-align: right;">4433.958</td>
+<td style="text-align: right;">2164.794</td>
+<td style="text-align: right;">6568.029</td>
+<td style="text-align: right;">242341.7</td>
+<td style="text-align: right;">232.5739</td>
+<td style="text-align: right;">17.84656</td>
+<td style="text-align: right;">8.845575</td>
+<td style="text-align: right;">15.63344</td>
+<td style="text-align: right;">18.37845</td>
+<td style="text-align: right;">26.91876</td>
+<td style="text-align: right;">69.77623</td>
+<td style="text-align: right;">320.1967</td>
+<td style="text-align: right;">242661.9</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">905.6697</td>
+<td style="text-align: right;">64.93126</td>
+<td style="text-align: right;">28.75810</td>
+<td style="text-align: right;">17.96098</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">103.91523</td>
+<td style="text-align: right;">309.6011</td>
+<td style="text-align: right;">0.0075007</td>
+<td style="text-align: right;">1121.235</td>
+<td style="text-align: right;">1017.320</td>
+<td style="text-align: right;">103.91523</td>
+<td style="text-align: right;">221425.8</td>
+<td style="text-align: right;">20880.07</td>
+<td style="text-align: right;">485.583</td>
+<td style="text-align: right;">242791.5</td>
+<td style="text-align: right;">12389.69</td>
+<td style="text-align: right;">1185.738</td>
+<td style="text-align: right;">33269.76</td>
+<td style="text-align: right;">16280.19</td>
+<td style="text-align: right;">16765.77</td>
+<td style="text-align: right;">13108.25</td>
+<td style="text-align: right;">13080.67</td>
+<td style="text-align: right;">12944.57</td>
+<td style="text-align: right;">13108.25</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">13108.25</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">3631.056</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">3631.056</td>
+<td style="text-align: right;">13080.670</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.3724010</td>
+<td style="text-align: right;">6062.759</td>
+<td style="text-align: right;">0.3616153</td>
+<td style="text-align: right;">220345.8</td>
+<td style="text-align: right;">15809.85</td>
+<td style="text-align: right;">3616.068</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">2588.914</td>
+<td style="text-align: right;">3616.068</td>
+<td style="text-align: right;">242360.6</td>
+<td style="text-align: right;">236.2029</td>
+<td style="text-align: right;">16.94760</td>
+<td style="text-align: right;">14.988349</td>
+<td style="text-align: right;">9.34801</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">32.19261</td>
+<td style="text-align: right;">56.52897</td>
+<td style="text-align: right;">309.6795</td>
+<td style="text-align: right;">242670.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">886.7786</td>
+<td style="text-align: right;">69.02184</td>
+<td style="text-align: right;">30.51733</td>
+<td style="text-align: right;">27.06316</td>
+<td style="text-align: right;">31.89777</td>
+<td style="text-align: right;">78.28845</td>
+<td style="text-align: right;">319.8843</td>
+<td style="text-align: right;">0.0089557</td>
+<td style="text-align: right;">1123.567</td>
+<td style="text-align: right;">1045.279</td>
+<td style="text-align: right;">78.28845</td>
+<td style="text-align: right;">221425.8</td>
+<td style="text-align: right;">20880.07</td>
+<td style="text-align: right;">485.583</td>
+<td style="text-align: right;">242791.5</td>
+<td style="text-align: right;">14469.21</td>
+<td style="text-align: right;">1259.656</td>
+<td style="text-align: right;">35349.28</td>
+<td style="text-align: right;">17295.08</td>
+<td style="text-align: right;">17780.66</td>
+<td style="text-align: right;">13901.61</td>
+<td style="text-align: right;">9827.87</td>
+<td style="text-align: right;">9725.40</td>
+<td style="text-align: right;">13901.61</td>
+<td style="text-align: right;">8252.478</td>
+<td style="text-align: right;">22154.09</td>
+<td style="text-align: right;">12284.84</td>
+<td style="text-align: right;">3850.822</td>
+<td style="text-align: right;">4000.468</td>
+<td style="text-align: right;">7851.291</td>
+<td style="text-align: right;">6166.953</td>
+<td style="text-align: right;">3660.917</td>
+<td style="text-align: right;">0.4093213</td>
+<td style="text-align: right;">7079.242</td>
+<td style="text-align: right;">0.3981429</td>
+<td style="text-align: right;">215788.7</td>
+<td style="text-align: right;">16795.41</td>
+<td style="text-align: right;">3834.927</td>
+<td style="text-align: right;">3983.955</td>
+<td style="text-align: right;">1945.080</td>
+<td style="text-align: right;">7818.882</td>
+<td style="text-align: right;">242348.0</td>
+<td style="text-align: right;">231.3178</td>
+<td style="text-align: right;">18.00409</td>
+<td style="text-align: right;">15.895503</td>
+<td style="text-align: right;">14.04684</td>
+<td style="text-align: right;">16.51321</td>
+<td style="text-align: right;">24.18666</td>
+<td style="text-align: right;">70.64222</td>
+<td style="text-align: right;">319.9641</td>
+<td style="text-align: right;">242668.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(final_outcomes_vs_base, <span class="at">caption =</span> <span class="st">"Difference vs base scenario S1"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Difference vs base scenario S1</caption>
+<colgroup>
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 0%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 2%">
+<col style="width: 2%">
+<col style="width: 1%">
+<col style="width: 1%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">scenario</th>
+<th style="text-align: right;">d_S_vs_S1</th>
+<th style="text-align: right;">d_C_vs_S1</th>
+<th style="text-align: right;">d_I_vs_S1</th>
+<th style="text-align: right;">d_Xtest_vs_S1</th>
+<th style="text-align: right;">d_FN_vs_S1</th>
+<th style="text-align: right;">d_Xtreat_vs_S1</th>
+<th style="text-align: right;">d_D_vs_S1</th>
+<th style="text-align: right;">d_lambda_vs_S1</th>
+<th style="text-align: right;">d_hospital_bed_occupancy_vs_S1</th>
+<th style="text-align: right;">d_general_ward_bed_occupancy_vs_S1</th>
+<th style="text-align: right;">d_side_room_bed_occupancy_vs_S1</th>
+<th style="text-align: right;">d_admitted_susceptible_vs_S1</th>
+<th style="text-align: right;">d_admitted_colonised_vs_S1</th>
+<th style="text-align: right;">d_admitted_infected_vs_S1</th>
+<th style="text-align: right;">d_total_admissions_vs_S1</th>
+<th style="text-align: right;">d_colonised_in_hospital_vs_S1</th>
+<th style="text-align: right;">d_decolonised_in_hospital_vs_S1</th>
+<th style="text-align: right;">d_total_colonised_incidence_vs_S1</th>
+<th style="text-align: right;">d_infected_in_hospital_vs_S1</th>
+<th style="text-align: right;">d_total_infected_incidence_vs_S1</th>
+<th style="text-align: right;">d_suspected_cases_vs_S1</th>
+<th style="text-align: right;">d_confirmed_cases_vs_S1</th>
+<th style="text-align: right;">d_recovered_cases_vs_S1</th>
+<th style="text-align: right;">d_first_test_vs_S1</th>
+<th style="text-align: right;">d_retest_false_negatives_vs_S1</th>
+<th style="text-align: right;">d_total_test_vs_S1</th>
+<th style="text-align: right;">d_false_negatives_vs_S1</th>
+<th style="text-align: right;">d_missed_untested_cases_vs_S1</th>
+<th style="text-align: right;">d_missed_false_negative_cases_vs_S1</th>
+<th style="text-align: right;">d_total_missed_cases_vs_S1</th>
+<th style="text-align: right;">d_confirmed_via_first_test_vs_S1</th>
+<th style="text-align: right;">d_confirmed_via_retest_vs_S1</th>
+<th style="text-align: right;">d_prop_C_hospital_acquired_vs_S1</th>
+<th style="text-align: right;">d_hospital_attributable_I_vs_S1</th>
+<th style="text-align: right;">d_prop_I_hospital_attributable_vs_S1</th>
+<th style="text-align: right;">d_discharges_susceptible_vs_S1</th>
+<th style="text-align: right;">d_discharges_colonised_vs_S1</th>
+<th style="text-align: right;">d_discharges_infected_vs_S1</th>
+<th style="text-align: right;">d_discharges_FN_vs_S1</th>
+<th style="text-align: right;">d_discharges_recovered_vs_S1</th>
+<th style="text-align: right;">d_discharges_while_infected_vs_S1</th>
+<th style="text-align: right;">d_total_discharges_vs_S1</th>
+<th style="text-align: right;">d_deaths_susceptible_vs_S1</th>
+<th style="text-align: right;">d_deaths_colonised_vs_S1</th>
+<th style="text-align: right;">d_deaths_infected_vs_S1</th>
+<th style="text-align: right;">d_deaths_suspected_cases_vs_S1</th>
+<th style="text-align: right;">d_deaths_FN_vs_S1</th>
+<th style="text-align: right;">d_deaths_confirmed_cases_vs_S1</th>
+<th style="text-align: right;">d_deaths_post_infection_vs_S1</th>
+<th style="text-align: right;">d_total_deaths_vs_S1</th>
+<th style="text-align: right;">d_total_exits_vs_S1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">S1</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">0.0000000</td>
+<td style="text-align: right;">0.0000000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.0000000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.0000000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.0000000</td>
+<td style="text-align: right;">0.0000000</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">0.000000</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">0.0000000</td>
+<td style="text-align: right;">0.000000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S2</td>
+<td style="text-align: right;">-20.605856</td>
+<td style="text-align: right;">4.513447</td>
+<td style="text-align: right;">1.088616</td>
+<td style="text-align: right;">10.259923</td>
+<td style="text-align: right;">35.47148</td>
+<td style="text-align: right;">-27.69968</td>
+<td style="text-align: right;">11.4100116</td>
+<td style="text-align: right;">0.0015860</td>
+<td style="text-align: right;">3.027934</td>
+<td style="text-align: right;">30.727613</td>
+<td style="text-align: right;">-27.69968</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2296.5609</td>
+<td style="text-align: right;">81.63252</td>
+<td style="text-align: right;">2296.5609</td>
+<td style="text-align: right;">1120.815</td>
+<td style="text-align: right;">1120.815</td>
+<td style="text-align: right;">983.5074</td>
+<td style="text-align: right;">-3519.852</td>
+<td style="text-align: right;">-3483.499</td>
+<td style="text-align: right;">983.5074</td>
+<td style="text-align: right;">9184.628</td>
+<td style="text-align: right;">10168.136</td>
+<td style="text-align: right;">13672.42</td>
+<td style="text-align: right;">136.2185</td>
+<td style="text-align: right;">4452.337</td>
+<td style="text-align: right;">4588.555</td>
+<td style="text-align: right;">-7594.246</td>
+<td style="text-align: right;">4074.395</td>
+<td style="text-align: right;">0.0417967</td>
+<td style="text-align: right;">1122.620</td>
+<td style="text-align: right;">0.0413229</td>
+<td style="text-align: right;">-4975.788</td>
+<td style="text-align: right;">1088.434</td>
+<td style="text-align: right;">135.6562</td>
+<td style="text-align: right;">4433.958</td>
+<td style="text-align: right;">-696.6998</td>
+<td style="text-align: right;">4569.615</td>
+<td style="text-align: right;">-14.439527</td>
+<td style="text-align: right;">-5.333869</td>
+<td style="text-align: right;">1.166762</td>
+<td style="text-align: right;">0.5622854</td>
+<td style="text-align: right;">5.3012847</td>
+<td style="text-align: right;">18.37845</td>
+<td style="text-align: right;">-8.663316</td>
+<td style="text-align: right;">15.57870</td>
+<td style="text-align: right;">11.4115948</td>
+<td style="text-align: right;">-3.027932</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">S3</td>
+<td style="text-align: right;">-6.574482</td>
+<td style="text-align: right;">1.031274</td>
+<td style="text-align: right;">12.878526</td>
+<td style="text-align: right;">-1.874315</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">-10.84406</td>
+<td style="text-align: right;">0.8942554</td>
+<td style="text-align: right;">0.0003715</td>
+<td style="text-align: right;">-5.383054</td>
+<td style="text-align: right;">5.461003</td>
+<td style="text-align: right;">-10.84406</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">527.1013</td>
+<td style="text-align: right;">18.73627</td>
+<td style="text-align: right;">527.1013</td>
+<td style="text-align: right;">257.249</td>
+<td style="text-align: right;">257.249</td>
+<td style="text-align: right;">-1380.2607</td>
+<td style="text-align: right;">-1377.121</td>
+<td style="text-align: right;">-1362.898</td>
+<td style="text-align: right;">-1380.2607</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">-1380.261</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">1624.3583</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">1624.358</td>
+<td style="text-align: right;">-1377.121</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.0101033</td>
+<td style="text-align: right;">257.684</td>
+<td style="text-align: right;">0.0099742</td>
+<td style="text-align: right;">-1590.404</td>
+<td style="text-align: right;">249.817</td>
+<td style="text-align: right;">1617.6533</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">-272.5795</td>
+<td style="text-align: right;">1617.653</td>
+<td style="text-align: right;">4.486861</td>
+<td style="text-align: right;">-1.704857</td>
+<td style="text-align: right;">0.267795</td>
+<td style="text-align: right;">6.7050595</td>
+<td style="text-align: right;">-0.9841498</td>
+<td style="text-align: right;">0.00000</td>
+<td style="text-align: right;">-3.389469</td>
+<td style="text-align: right;">2.33144</td>
+<td style="text-align: right;">0.8943788</td>
+<td style="text-align: right;">5.381239</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">S4</td>
+<td style="text-align: right;">-25.465649</td>
+<td style="text-align: right;">5.121851</td>
+<td style="text-align: right;">14.637755</td>
+<td style="text-align: right;">7.227865</td>
+<td style="text-align: right;">31.89777</td>
+<td style="text-align: right;">-36.47083</td>
+<td style="text-align: right;">11.1774558</td>
+<td style="text-align: right;">0.0018264</td>
+<td style="text-align: right;">-3.051239</td>
+<td style="text-align: right;">33.419594</td>
+<td style="text-align: right;">-36.47083</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2606.6206</td>
+<td style="text-align: right;">92.65380</td>
+<td style="text-align: right;">2606.6206</td>
+<td style="text-align: right;">1272.137</td>
+<td style="text-align: right;">1272.137</td>
+<td style="text-align: right;">-586.8981</td>
+<td style="text-align: right;">-4629.920</td>
+<td style="text-align: right;">-4582.069</td>
+<td style="text-align: right;">-586.8981</td>
+<td style="text-align: right;">8252.478</td>
+<td style="text-align: right;">7665.580</td>
+<td style="text-align: right;">12284.84</td>
+<td style="text-align: right;">1844.1241</td>
+<td style="text-align: right;">4000.468</td>
+<td style="text-align: right;">5844.592</td>
+<td style="text-align: right;">-8290.837</td>
+<td style="text-align: right;">3660.917</td>
+<td style="text-align: right;">0.0470235</td>
+<td style="text-align: right;">1274.168</td>
+<td style="text-align: right;">0.0465018</td>
+<td style="text-align: right;">-6147.567</td>
+<td style="text-align: right;">1235.384</td>
+<td style="text-align: right;">1836.5119</td>
+<td style="text-align: right;">3983.955</td>
+<td style="text-align: right;">-916.4139</td>
+<td style="text-align: right;">5820.467</td>
+<td style="text-align: right;">-8.129582</td>
+<td style="text-align: right;">-6.589974</td>
+<td style="text-align: right;">1.324288</td>
+<td style="text-align: right;">7.6122133</td>
+<td style="text-align: right;">3.7146794</td>
+<td style="text-align: right;">16.51321</td>
+<td style="text-align: right;">-11.395414</td>
+<td style="text-align: right;">16.44469</td>
+<td style="text-align: right;">11.1790072</td>
+<td style="text-align: right;">3.049425</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="plots" class="level2">
+<h2 class="anchored" data-anchor-id="plots">11) Plots</h2>
+<p>Create a series of plots to visualise the model states and flows over time, as well as the final outcomes. The plotting functions take the long-format data frames of states and flows, as well as the final outcomes, and generate ggplot objects. Save each plot as a PNG file in the output directory.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Generate input data for plots</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>plot_long_states <span class="ot">&lt;-</span> <span class="fu">make_plot_long_states</span>(scenario_post, longest_stabilisation)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>plot_long_bed_occupancy <span class="ot">&lt;-</span><span class="fu">make_plot_long_bed_occupancy</span>(scenario_post, longest_stabilisation)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>plot_long_flows  <span class="ot">&lt;-</span> <span class="fu">make_plot_long_flows</span>(scenario_post)</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Core state plots</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>p_states_line             <span class="ot">&lt;-</span> <span class="fu">plot_states_line</span>(plot_long_states)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>p_states_line_noS         <span class="ot">&lt;-</span> <span class="fu">plot_states_line_noS</span>(plot_long_states)</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>p_states_area             <span class="ot">&lt;-</span> <span class="fu">plot_states_area</span>(plot_long_states)</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>p_states_area_noS         <span class="ot">&lt;-</span> <span class="fu">plot_states_area_noS</span>(plot_long_states)</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Bed occupancy</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>p_bed_occupancy           <span class="ot">&lt;-</span> <span class="fu">plot_bed_occupancy</span>(plot_long_bed_occupancy, longest_stabilisation)</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>p_cumulative_bed_occupancy<span class="ot">&lt;-</span> <span class="fu">plot_cumulative_bed_occupancy</span>(patient_days_summary)</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Flows and ascertainment</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>p_flows_to_C_and_I        <span class="ot">&lt;-</span> <span class="fu">plot_flows_to_C_and_I</span>(plot_long_flows, longest_stabilisation, final_outcomes)</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>p_case_ascertainment_line <span class="ot">&lt;-</span> <span class="fu">plot_case_ascertainment_line</span>(plot_long_flows, longest_stabilisation)</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>p_case_ascertainment_bar  <span class="ot">&lt;-</span> <span class="fu">plot_case_ascertainment_bar</span>(final_outcomes)</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Testing and confirmations</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>p_testing_bar             <span class="ot">&lt;-</span> <span class="fu">plot_testing_bar</span>(final_outcomes)</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>p_case_confirmation_bar   <span class="ot">&lt;-</span> <span class="fu">plot_case_confirmation_bar</span>(final_outcomes)</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Missed cases, deaths, discharges, cumulative outcomes</span></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>p_missed_cases_bar        <span class="ot">&lt;-</span> <span class="fu">plot_missed_cases_bar</span>(final_outcomes)</span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>p_deaths_by_state_area_noS     <span class="ot">&lt;-</span> <span class="fu">plot_deaths_by_state_area_noS</span>(plot_long_flows, longest_stabilisation)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>p_discharges_by_state_area_noS <span class="ot">&lt;-</span> <span class="fu">plot_discharges_by_state_area_noS</span>(plot_long_flows, longest_stabilisation)</span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>p_case_outcomes_bar       <span class="ot">&lt;-</span> <span class="fu">plot_case_outcomes_bar</span>(final_outcomes)</span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a><span class="co"># Scenario parameters</span></span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>p_scenario_params         <span class="ot">&lt;-</span> <span class="fu">plot_scenario_params</span>(control_parms)</span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a><span class="co"># Save plots to files</span></span>
+<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_states_lines_facet.png"</span>),         p_states_line,              <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_states_lines_facet_noS.png"</span>),     p_states_line_noS,          <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_states_area_facet.png"</span>),          p_states_area,              <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_states_area_facet_noS.png"</span>),      p_states_area_noS,          <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_flows_to_C_and_I.png"</span>),           p_flows_to_C_and_I,         <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-40"><a href="#cb12-40" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_case_ascertainment_line.png"</span>),    p_case_ascertainment_line,  <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-41"><a href="#cb12-41" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_case_ascertainment_bar.png"</span>),     p_case_ascertainment_bar,   <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-42"><a href="#cb12-42" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_testing_bar.png"</span>),                p_testing_bar,              <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-43"><a href="#cb12-43" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_case_confirmation_bar.png"</span>),      p_case_confirmation_bar,    <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-44"><a href="#cb12-44" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_missed_cases_bar.png"</span>),           p_missed_cases_bar,         <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-45"><a href="#cb12-45" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_deaths_by_state_area_noS.png"</span>),        p_deaths_by_state_area_noS,      <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-46"><a href="#cb12-46" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_discharges_by_state_area_noS.png"</span>),    p_discharges_by_state_area_noS,  <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-47"><a href="#cb12-47" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_case_outcomes_bar.png"</span>),          p_case_outcomes_bar,        <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-48"><a href="#cb12-48" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_bed_occupancy.png"</span>),              p_bed_occupancy,            <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-49"><a href="#cb12-49" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_cumulative_bed_occupancy.png"</span>),   p_cumulative_bed_occupancy, <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-50"><a href="#cb12-50" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"plot_scenario_params.png"</span>),            p_scenario_params,          <span class="at">width =</span> <span class="dv">15</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">units =</span> <span class="st">"cm"</span>)</span>
+<span id="cb12-51"><a href="#cb12-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-52"><a href="#cb12-52" aria-hidden="true" tabindex="-1"></a><span class="co"># Print the plots inline in quarto/HTML document for visual review</span></span>
+<span id="cb12-53"><a href="#cb12-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-54"><a href="#cb12-54" aria-hidden="true" tabindex="-1"></a>combined_plot <span class="ot">&lt;-</span> <span class="fu">plot_grid</span>(</span>
+<span id="cb12-55"><a href="#cb12-55" aria-hidden="true" tabindex="-1"></a>p_states_line,</span>
+<span id="cb12-56"><a href="#cb12-56" aria-hidden="true" tabindex="-1"></a>p_states_line_noS,</span>
+<span id="cb12-57"><a href="#cb12-57" aria-hidden="true" tabindex="-1"></a>p_flows_to_C_and_I,</span>
+<span id="cb12-58"><a href="#cb12-58" aria-hidden="true" tabindex="-1"></a>p_scenario_params,</span>
+<span id="cb12-59"><a href="#cb12-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-60"><a href="#cb12-60" aria-hidden="true" tabindex="-1"></a>p_states_area,</span>
+<span id="cb12-61"><a href="#cb12-61" aria-hidden="true" tabindex="-1"></a>p_states_area_noS,</span>
+<span id="cb12-62"><a href="#cb12-62" aria-hidden="true" tabindex="-1"></a>p_bed_occupancy,</span>
+<span id="cb12-63"><a href="#cb12-63" aria-hidden="true" tabindex="-1"></a>p_cumulative_bed_occupancy,</span>
+<span id="cb12-64"><a href="#cb12-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-65"><a href="#cb12-65" aria-hidden="true" tabindex="-1"></a>p_case_ascertainment_line,</span>
+<span id="cb12-66"><a href="#cb12-66" aria-hidden="true" tabindex="-1"></a>p_discharges_by_state_area_noS,</span>
+<span id="cb12-67"><a href="#cb12-67" aria-hidden="true" tabindex="-1"></a>p_deaths_by_state_area_noS,</span>
+<span id="cb12-68"><a href="#cb12-68" aria-hidden="true" tabindex="-1"></a>p_case_ascertainment_bar,</span>
+<span id="cb12-69"><a href="#cb12-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-70"><a href="#cb12-70" aria-hidden="true" tabindex="-1"></a>p_testing_bar,</span>
+<span id="cb12-71"><a href="#cb12-71" aria-hidden="true" tabindex="-1"></a>p_case_confirmation_bar,</span>
+<span id="cb12-72"><a href="#cb12-72" aria-hidden="true" tabindex="-1"></a>p_missed_cases_bar,</span>
+<span id="cb12-73"><a href="#cb12-73" aria-hidden="true" tabindex="-1"></a>p_case_outcomes_bar,</span>
+<span id="cb12-74"><a href="#cb12-74" aria-hidden="true" tabindex="-1"></a><span class="at">ncol =</span> <span class="dv">4</span>)</span>
+<span id="cb12-75"><a href="#cb12-75" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-76"><a href="#cb12-76" aria-hidden="true" tabindex="-1"></a><span class="co"># Save the combined plot to a wide (landscape) page</span></span>
+<span id="cb12-77"><a href="#cb12-77" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"combined_landscape_plots.png"</span>),</span>
+<span id="cb12-78"><a href="#cb12-78" aria-hidden="true" tabindex="-1"></a>       combined_plot, <span class="at">width =</span> <span class="dv">32</span>, <span class="at">height =</span> <span class="dv">18</span>, <span class="at">units =</span> <span class="st">"cm"</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
+<span id="cb12-79"><a href="#cb12-79" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-80"><a href="#cb12-80" aria-hidden="true" tabindex="-1"></a><span class="co"># To show inline</span></span>
+<span id="cb12-81"><a href="#cb12-81" aria-hidden="true" tabindex="-1"></a>combined_plot</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Model1_ODE_Model_Run_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="end-of-script" class="level2">
+<h2 class="anchored" data-anchor-id="end-of-script">End of script</h2>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

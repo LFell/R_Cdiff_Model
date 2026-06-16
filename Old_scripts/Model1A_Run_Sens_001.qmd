@@ -1,0 +1,114 @@
+---
+title: "Model 1A Sensitivity Run 001"
+format:
+  html:
+    toc: true
+    code-fold: true
+params:
+  scenario_id: "001"
+  scenario_label: "Baseline"
+  max_time: 365
+  dt: 0.5
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+source("Model1A_Parameters.R")
+source("Model1A_Functions.R")
+```
+
+```{r}
+pars <- build_model1a_parameters(
+  scenario_id = params$scenario_id,
+  scenario_label = params$scenario_label,
+  max_time = params$max_time,
+  dt = params$dt
+)
+
+output_root <- file.path("..", "Outputs")
+scenario_tag <- paste0("Model1A_Run_Sens_", params$scenario_id)
+output_dir <- file.path(output_root, scenario_tag)
+if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+times <- make_model1a_times(pars$max_time, pars$dt)
+out <- ode(
+  y = pars$initial_state,
+  times = times,
+  func = model1a_ode,
+  parms = pars,
+  method = "lsoda"
+)
+
+out <- as.data.frame(out)
+out <- calculate_model1a_derived_outputs(out)
+stab_row <- find_model1a_stabilisation(out, tol = pars$stabilisation_tol, window = pars$stabilisation_window)
+stab_summary <- summarise_model1a_stabilisation(out, stab_row)
+files <- save_model1a_outputs(out, stab_row, output_dir, scenario_tag)
+```
+
+## Scenario details
+
+- Scenario ID: `r params$scenario_id`
+- Scenario label: `r params$scenario_label`
+- Time step: `r params$dt` days
+- Horizon: `r params$max_time` days
+
+## State trajectories by time step
+
+```{r}
+knitr::kable(
+  out[, c("time", "S", "C", "I", "X", "E")],
+  digits = 4,
+  caption = "Numbers in each state at each time step"
+)
+```
+
+The full state trajectory table is also saved to:
+
+`r normalizePath(files$state_file)`
+
+## Cumulative outcomes
+
+```{r}
+knitr::kable(
+  out[, c("time", "CumCases", "CumIdentified", "CumFalseNeg", "CumDischC", "CumDischI", "CumXDays", "CumDeaths", "CumCI", "CumAdmI", "CumXS", "CumXI", "CumXDisch")],
+  digits = 4,
+  caption = "Cumulative totals across the simulation"
+)
+```
+
+The full cumulative table is also saved to:
+
+`r normalizePath(files$cum_file)`
+
+## Values at model stabilisation
+
+Stabilisation is taken as the first time point where the absolute change in all core states remains below the tolerance for the configured window.
+
+```{r}
+knitr::kable(stab_summary, digits = 4, caption = "State values and outcomes at model stabilisation")
+```
+
+The stabilisation summary is also saved to:
+
+`r normalizePath(files$stab_file)`
+
+## Plots
+
+```{r}
+knitr::include_graphics(files$plot_states_file)
+knitr::include_graphics(files$plot_cum_file)
+knitr::include_graphics(files$plot_outcomes_file)
+```
+
+## Outcome definitions used here
+
+- Total cases = `CumCI + CumAdmI`
+- Identified cases = `CumXS + CumXDisch`
+- Missed cases = `Total cases - Identified cases`
+- False negatives = `CumXI`
+- Invasive infections not identified as suspected cases = `Missed cases - False negatives`
+- Side-room use (patient-days) = cumulative area under `X`
