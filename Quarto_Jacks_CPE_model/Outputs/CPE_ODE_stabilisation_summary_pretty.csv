@@ -1,4 +1,0 @@
-scenario,stabilisation_day,tolerance,consecutive_days,stabilised,Sg,Cg,Ig
-i0,2,1e-4,30,TRUE,0,0,0
-i1,2,1e-4,30,TRUE,0,0,0
-i2,2,1e-4,30,TRUE,0,0,0
