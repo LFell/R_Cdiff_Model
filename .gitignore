@@ -47,3 +47,14 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Other folders
+Not_in_repo/
+Outputs/
+
+# Other file formats
+*.html
+
+# Windows
+Thumbs.db
+
