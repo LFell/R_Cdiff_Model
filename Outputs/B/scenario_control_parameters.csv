@@ -1,5 +1,0 @@
-scenario,isolate_before_test,prop_I_suspected,test_sens,test_turnaround
-S1,FALSE,1,1,2
-S2,FALSE,1,0.5,2
-S3,FALSE,0.5,1,2
-S4,FALSE,0.5,0.5,2

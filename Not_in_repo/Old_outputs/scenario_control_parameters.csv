@@ -1,5 +1,0 @@
-Scenario,Isolate before test,Prop. suspected cases identified,Test sensitivity,Test turnaround (days)
-S1,TRUE,1,1,2
-S2,TRUE,1,0.5,2
-S3,TRUE,0.5,1,2
-S4,TRUE,0.5,0.5,2
