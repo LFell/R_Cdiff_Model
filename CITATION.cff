@@ -2,8 +2,8 @@ cff-version: 1.0
 message: "If you use this analysis code, please cite it as below."
 title: "ODE transmission model of hospital-onset C. difficile infection"
 authors:
-family-names: "Fellowes"
-given-names: "Laura"
+  - family-names: "Fellowes"
+    given-names: "Laura"
 type: Modelling code
 repository-code: "https://github.com/YOUR-USERNAME/R_Cdiff_Model"
 date-released: "2026-06-17"
