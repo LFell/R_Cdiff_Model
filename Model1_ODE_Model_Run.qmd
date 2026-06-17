@@ -271,7 +271,17 @@ knitr::kable(final_outcomes, caption = "Model end states and cumulative flows")
 knitr::kable(final_outcomes_vs_base, caption = "Difference vs base scenario S1")
 ```
 
-## 11) Plots
+## 11) Research question outcomes
+
+Derive and display all outcomes of interest, as defined in the model research questions. Proportions labelled `[1]` do not sum to 1 across case ascertainment categories: the gap reflects deaths in Xtest (patients tested but who died before their result was acted on) and cases still unresolved in hospital at the end of the model run. Differences labelled `[2]` are discharge minus admission prevalence in percentage points (pp); a positive value indicates the hospital is a net source.
+
+```{r}
+research_outcomes <- make_research_outcomes_table(final_outcomes, patient_days_summary)
+write_csv(research_outcomes, file.path(output_dir, "research_outcomes.csv"))
+knitr::kable(research_outcomes, caption = "Outcomes of interest by scenario")
+```
+
+## 12) Plots
 
 Create a series of plots to visualise the model states and flows over time, as well as the final outcomes. The plotting functions take the long-format data frames of states and flows, as well as the final outcomes, and generate ggplot objects. Save each plot as a PNG file in the output directory.
 

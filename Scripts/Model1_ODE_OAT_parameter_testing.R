@@ -52,10 +52,10 @@ mod.init <- c(S = 909, C = 86, I = 5, Xtest = 0, FN = 0, Xtreat = 0, D = 0)
 
 # Scenarios: the four scenarios as defined in Model1_ODE_Model_Run.qmd
 scenarios <- list(
-  S1 = list(isolate_before_test = FALSE, prop_I_suspected = 1.00, test_sens = 1.00, t_test_turnaround = 2),
-  S2 = list(isolate_before_test = FALSE, prop_I_suspected = 1.00, test_sens = 0.50, t_test_turnaround = 2),
-  S3 = list(isolate_before_test = FALSE, prop_I_suspected = 0.50, test_sens = 1.00, t_test_turnaround = 2),
-  S4 = list(isolate_before_test = FALSE, prop_I_suspected = 0.50, test_sens = 0.50, t_test_turnaround = 2)
+  S1 = list(isolate_before_test = TRUE, prop_I_suspected = 1.00, test_sens = 1.00, t_test_turnaround = 2),
+  S2 = list(isolate_before_test = TRUE, prop_I_suspected = 1.00, test_sens = 0.50, t_test_turnaround = 2),
+  S3 = list(isolate_before_test = TRUE, prop_I_suspected = 0.50, test_sens = 1.00, t_test_turnaround = 2),
+  S4 = list(isolate_before_test = TRUE, prop_I_suspected = 0.50, test_sens = 0.50, t_test_turnaround = 2)
 )
 
 # =========================================================== #

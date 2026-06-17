@@ -792,6 +792,7 @@ make_final_outcomes <- function(scenario_post) {
      
       # Hospital-attributable infections
       prop_C_hospital_acquired     = prop_C_hospital_acquired,
+      prop_C_hospital_attributable = prop_C_hospital_acquired,
       cum_hospital_attributable_I  = cum_hospital_attributable_I,
       prop_I_hospital_attributable = prop_I_hospital_attributable,
      
@@ -820,7 +821,110 @@ make_final_outcomes <- function(scenario_post) {
   }))
 }
 
-## b) Final outcomes vs base scenario ####
+## b) Research question outcomes table ####
+
+# Takes final_outcomes (from make_final_outcomes()) and patient_days_summary
+# (from calculate_total_patient_days()) and returns a single wide table of all
+# research question outcomes, one row per outcome and one column per scenario.
+#
+# Footnotes in the Outcome column:
+#   [1] prop_confirmed + prop_missed do not sum to 1; the gap reflects deaths
+#       in the Xtest state (tested but unconfirmed) and unresolved cases still
+#       in hospital at the end of the model run.
+#   [2] Discharge minus admission prevalence, in percentage points (pp).
+#       A positive value indicates the hospital is a net source.
+
+make_research_outcomes_table <- function(final_outcomes, patient_days_summary) {
+  
+  safe_div <- function(num, den) ifelse(den > 0, num / den, NA_real_)
+  
+  fo <- final_outcomes |>
+    left_join(
+      patient_days_summary |> select(scenario, hospital_bed_days, side_room_bed_days),
+      by = "scenario"
+    ) |>
+    mutate(
+      # Case ascertainment proportions
+      prop_confirmed            = safe_div(cum_confirmed_cases,        cum_total_infected_incidence),
+      prop_missed               = safe_div(cum_total_missed_cases,     cum_total_infected_incidence),
+      prop_confirmed_via_retest = safe_div(cum_confirmed_via_retest,   cum_total_infected_incidence),
+      
+      # Discharge and admission prevalence
+      prop_admitted_C           = safe_div(cum_admitted_colonised,     cum_total_admissions),
+      prop_admitted_I           = safe_div(cum_admitted_infected,      cum_total_admissions),
+      prop_discharged_C         = safe_div(cum_discharges_colonised,   cum_total_discharges),
+      prop_discharged_CDI       = safe_div(cum_discharges_while_infected, cum_total_discharges),
+      diff_prev_C               = prop_discharged_C   - prop_admitted_C,
+      diff_prev_CDI             = prop_discharged_CDI - prop_admitted_I,
+      
+      # Resource use
+      avg_LOS                   = safe_div(hospital_bed_days,          cum_total_admissions),
+      prop_side_room_bed_days   = safe_div(side_room_bed_days,         hospital_bed_days),
+      
+      # Mortality
+      prop_deaths_post_infection = safe_div(cum_deaths_post_infection, cum_total_deaths),
+      cum_deaths_missed_cases    = cum_deaths_infected + cum_deaths_FN,
+      prop_deaths_missed_cases   = safe_div(cum_deaths_infected + cum_deaths_FN, cum_total_deaths)
+    )
+  
+  outcomes_spec <- tribble(
+    ~group,                   ~label,                                                           ~variable,                     ~fmt,
+    
+    "Case ascertainment",     "(i) Total incident CDI cases (n)",                               "cum_total_infected_incidence", "n",
+    "Case ascertainment",     "(i) Confirmed (n)",                                              "cum_confirmed_cases",          "n",
+    "Case ascertainment",     "(i) Confirmed (%) [1]",                                          "prop_confirmed",               "pct",
+    "Case ascertainment",     "(ii) Missed (n)",                                                "cum_total_missed_cases",       "n",
+    "Case ascertainment",     "(ii) Missed (%) [1]",                                            "prop_missed",                  "pct",
+    "Case ascertainment",     "(iii) Confirmed via retest (n)",                                 "cum_confirmed_via_retest",     "n",
+    "Case ascertainment",     "(iii) Confirmed via retest (%) [1]",                             "prop_confirmed_via_retest",    "pct",
+    
+    "Transmission",           "(i) Hospital-acquired CDI (n)",                                  "cum_hospital_attributable_I",  "n",
+    "Transmission",           "(i) Hospital-acquired CDI (% of all CDI)",                       "prop_I_hospital_attributable", "pct",
+    "Transmission",           "(ii) Hospital-acquired colonisations (n)",                       "cum_colonised_in_hospital",    "n",
+    "Transmission",           "(ii) Hospital-acquired colonisations (% of all colonisations)",  "prop_C_hospital_attributable", "pct",
+    "Transmission",           "(ii) Colonisation prevalence at admission (%)",                 "prop_admitted_C",              "pct",
+    "Transmission",           "(iii) Colonisation prevalence at discharge (%)",                 "prop_discharged_C",            "pct",
+    "Transmission",           "(iii) Difference in colonisation prevalence (pp) [2]",           "diff_prev_C",                  "pp",
+    "Transmission",           "(iii) CDI prevalence at admission (%)",                          "prop_admitted_I",              "pct",
+    "Transmission",           "(iii) CDI prevalence at discharge (%)",                          "prop_discharged_CDI",          "pct",
+    "Transmission",           "(iii) Difference in CDI prevalence (pp) [2]",                   "diff_prev_CDI",                "pp",
+    
+    "Hospital resource use",  "(i) Total hospital bed-days",                                    "hospital_bed_days",            "n",
+    "Hospital resource use",  "(ii) Average length of stay (days)",                              "avg_LOS",                      "dec",
+    "Hospital resource use",  "(ii) Side-room bed-days",                                        "side_room_bed_days",           "n",
+    "Hospital resource use",  "(ii) Side-room bed-days (% of total)",                           "prop_side_room_bed_days",      "pct",
+    "Hospital resource use",  "(iii) Faecal specimens tested (n)",                              "cum_total_test",               "n",
+    
+    "Mortality",              "(i) Total hospital deaths (n)",                                  "cum_total_deaths",             "n",
+    "Mortality",              "(ii) Deaths following CDI (n)",                                  "cum_deaths_post_infection",    "n",
+    "Mortality",              "(ii) Deaths following CDI (% of all deaths)",                    "prop_deaths_post_infection",   "pct",
+    "Mortality",              "(iii) Deaths among missed CDI cases (n)",                        "cum_deaths_missed_cases",      "n",
+    "Mortality",              "(iii) Deaths among missed CDI cases (% of all deaths)",          "prop_deaths_missed_cases",     "pct"
+  )
+  
+  fmt_val <- function(x, fmt) {
+    dplyr::case_when(
+      fmt == "pct" ~ scales::percent(x, accuracy = 0.1),
+      fmt == "pp"  ~ paste0(sprintf("%+.1f", x * 100), " pp"),
+      fmt == "n"   ~ scales::comma(round(x)),
+      fmt == "dec" ~ sprintf("%.1f", x),
+      TRUE         ~ as.character(round(x, 3))
+    )
+  }
+  
+  scenario_cols <- fo |>
+    select(scenario, all_of(outcomes_spec$variable)) |>
+    pivot_longer(-scenario, names_to = "variable", values_to = "value")
+  
+  outcomes_spec |>
+    left_join(scenario_cols, by = "variable") |>
+    mutate(value_fmt = fmt_val(value, fmt)) |>
+    select(group, label, scenario, value_fmt) |>
+    pivot_wider(names_from = scenario, values_from = value_fmt) |>
+    rename("Research question" = group, "Outcome" = label)
+}
+
+## c) Final outcomes vs base scenario ####
 
 # Takes the final_outcomes tibble and returns absolute differences vs a chosen
 # base scenario for all numeric columns.
