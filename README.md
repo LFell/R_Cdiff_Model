@@ -110,17 +110,18 @@ Default parameter values are given in brackets; they are set in `Scripts/Model1_
 *Case identification and testing*
 
 - Only infected (symptomatic) patients are identified as suspected cases and tested. Patients in S and C don't develop diarrhoea that leads to testing. The test is assumed 100% specific, so there are no false positives. As a result, "faecal specimens tested" counts only tests of patients with CDI, and underestimates real testing volume.
-- Testing coverage (the proportion of CDI cases identified as suspected cases) sets the identification rate, with a mean time to identification of 2 days from the onset of symptoms. Infected patients can be discharged or die before they're identified, so the share actually tested is lower than the nominal coverage.
+- Testing coverage (the proportion of CDI cases tested for CDI) sets the identification rate, with a mean time to identification of 2 days from the onset of symptoms. Infected patients can be discharged or die before they're identified, so the share actually tested is lower than the nominal coverage.
 - Test results arrive after a fixed turnaround time (2 days). Each test, including retests, returns a positive result with probability equal to the test sensitivity. Results of repeat tests on the same patient are independent.
 - Patients with a false-negative result return to a general ward (FN), still symptomatic and transmitting. They are retested after a mean of 7 days unless they are discharged or die first.
-- Confirmed cases are treated. Under P1 and P2 they are isolated; under P3 they stay on a general ward.
+- Confirmed cases are treated. Under P2 and P3 they are isolated; under P1 they stay on a general ward.
 - Moving a patient between a general ward and a side room takes 0.5 days. This is added to the rate of any transition that involves such a move.
 - Side-room capacity is unlimited.
 
 *Outcome definitions*
 
 - **Missed cases:** patients who leave I or FN by discharge or death without a confirmed diagnosis. Deaths while awaiting a result in Xtest count as neither missed nor confirmed.
-- **Hospital-acquired CDI:** in-hospital C→I progressions, multiplied by the share of all colonisations that were acquired in hospital. This assumes patients colonised in hospital and those admitted colonised progress at the same rate.
+- **Hospital-onset CDI:** all in-hospital C→I progressions, i.e. patients admitted colonised plus patients colonised in hospital who progress to CDI during their stay.
+- **Hospital-acquired CDI:** in-hospital C→I progressions, multiplied by the share of all colonisations that were acquired in hospital (a subset of hospital-onset CDI). This assumes patients colonised in hospital and those admitted colonised progress at the same rate.
 
 ------------------------------------------------------------------------
 
@@ -255,7 +256,7 @@ under `"none"`), `oat_specs_policy` overrides the expectation for the
 named policy.
 
 The % change (high vs low) in the ten cumulative outcomes compared across
-the scenario grid (see section 12 of the QMD) is also reported for
+the scenario grid (see section 13 of the QMD) is also reported for
 inspection, without expected directions.
 
 **Files produced:**
@@ -287,15 +288,21 @@ Main Quarto document. Runs the end-to-end workflow:
   scenario grid (edit values here for each run),
 - model execution for every scenario in the grid (cached), plus full
   time series for a few example scenarios,
-- negative-value and stabilisation checks for every scenario,
-- annual summaries for the example scenarios,
-- final outcomes and the research question outcomes table for every
-  scenario (including differences vs P1; Section 10),
-- time-series and outcome plots for the example scenarios (Section 11),
-- plots comparing the isolation policies across testing coverage and
-  test sensitivity (Section 12),
-- outcomes avoided by increasing test sensitivity, e.g. from 50% to 80%
+- negative-value and stabilisation checks for every scenario (Sections 7
+  and 8),
+- time-series line and area plots for the example scenarios, up to
+  stabilisation (Section 9),
+- annual summary tables for the example scenarios (Section 10),
+- research question outcomes: the research outcomes table (annual totals,
+  including rates per 10,000 patient bed-days) for every scenario, and
+  differences between policies (P2 vs P1, P3 vs P1, P3 vs P2; Section 11),
+- stacked bar plots of annual summaries for the example scenarios
+  (Section 12),
+- outcomes by testing coverage and test sensitivity: plots comparing the
+  isolation policies across the grid, including rates and proportions
   (Section 13),
+- change in outcomes due to increasing test sensitivity, e.g. from 50% to
+  80% (Section 14),
 - CSV and PNG export to `Outputs/<run_label>/`.
 
 Accepts a `run_label` parameter (see **Run instructions** below).
@@ -346,7 +353,15 @@ This will:
 
 - execute the QMD in a fresh R session,
 - save all CSVs and plots to `Outputs/A/`,
-- produce `Model1_ODE_Model_Run_A.html` in the project root.
+- produce `YYMMDD_Model1_ODE_Model_Run_A.html` in the project root,
+  prefixed with today's date (e.g. `261008_Model1_ODE_Model_Run_A.html`),
+  so reports from earlier days are kept for comparison. Rendering the
+  same label again on the same day overwrites that day's file.
+
+The HTML is self-contained (`embed-resources: true` in the QMD YAML): the
+plots are embedded in the file, so each dated report keeps its own plots
+even after `Outputs/A/` is overwritten by a later run, and the HTML can be
+moved or shared on its own (about 10 MB).
 
 To run a second set of scenarios, edit the scenario values again and
 call `render_run("B")`, and so on. The `run_label` in the QMD YAML does
@@ -372,7 +387,9 @@ a labelled output folder.
   excluded from all cumulative totals, patient-days and annual summaries,
   so these cover the analysis period only. `add_quantities()` gives rows
   in the burn-in (including time 0) zero width and multiplies every other
-  output row by the time step.
+  output row by the time step. Sections 10–13 of the QMD report annual
+  totals (the analysis-period total divided by its length in years), for
+  comparison with surveillance data.
 - All model time intervals (e.g. `t_test_turnaround`, length-of-stay)
   and transition rates use the same day-based timescale.
 - Annual summaries use 365-day intervals counted from the end of the
@@ -380,9 +397,10 @@ a labelled output folder.
 - Stabilisation is assessed automatically for every scenario in the grid
   (states changing by ≤ 1e-4 per time step for 10 consecutive time steps;
   the `consecutive_days` setting counts time steps, not days, so this is
-  5 days at the half-day step). Section 8 checks that every scenario
-  stabilises before the end of the burn-in (with the defaults, all do
-  within 250 days) and warns if not. Time-series plots show data up to
+  5 days at the half-day step). Section 8 checks that the burn-in is
+  longer than every scenario's stabilisation period (with the defaults,
+  all stabilise within 250 days) and stops the render with an error
+  listing any that are not, so `burn_in` can be increased. Time-series plots show data up to
   the longest stabilisation period across the example scenarios, i.e.
   the approach to steady state during the burn-in.
 - The OAT script uses the same 1-year burn-in on its 3-year runs.
@@ -397,41 +415,54 @@ grid; by default 3 policies × 11 coverage values × 11 sensitivity values
 = 363 scenarios, about 3–4 minutes on one core, about 30 seconds in
 parallel). The three control variables are:
 
-- `isolation_policy`: which patients are isolated in a side room
-  (numbered in this order; P2 and P3 are compared against P1, set by
-  `reference_policy` in `Scripts/Model1_ODE_Functions.R`):
-  - P1 `"suspected_and_confirmed"`: suspected cases awaiting a test
-    result (`Xtest`) and confirmed cases (`Xtreat`)
+- `isolation_policy`: which patients are isolated in a side room,
+  numbered from least to most isolation (set by `isolation_policy_levels`
+  in `Scripts/Model1_ODE_Functions.R`):
+  - P1 `"none"`: neither suspected nor confirmed cases (the reference
+    policy)
   - P2 `"confirmed"`: confirmed cases (`Xtreat`) only
-  - P3 `"none"`: neither suspected nor confirmed cases
-- `prop_I_suspected` (testing coverage): proportion of CDI cases
-  identified as suspected cases (0--1). The model uses it to calculate
-  the case identification rate `gamma = prop_I_suspected /
-  t_identify_suspected` (plus `t_patient_transfer` under P1). As patients
+  - P3 `"suspected_and_confirmed"`: suspected cases awaiting a test
+    result (`Xtest`) and confirmed cases (`Xtreat`), as recommended in
+    best-practice guidance
+
+  Differences between policies (policy minus comparator, negative =
+  fewer) are reported for P2 vs P1, P3 vs P1 and P3 vs P2 (the
+  incremental effect of also isolating suspected cases), set in
+  `policy_comparisons`.
+- `prop_I_suspected` (testing coverage): proportion of CDI cases tested
+  for CDI (identified as suspected cases; 0--1). The model uses it to
+  calculate the case identification rate `gamma = prop_I_suspected /
+  t_identify_suspected` (plus `t_patient_transfer` under P3). As patients
   can be discharged or die from I first, the share of infected patients
   actually tested is lower (with the default parameters about 88% at 100%
-  and 78% at 50%; 85% and 74% under P1). Plots and tables label it
-  "Proportion of CDI cases identified as suspected cases".
+  and 78% at 50%; 85% and 74% under P3). Plots and tables label it
+  "Proportion of CDI cases tested for CDI".
 - `test_sens`: diagnostic test sensitivity (0--1). The model uses it to
   calculate the confirmed case rate (`theta = test_sens /
   t_test_turnaround`) and false negative rate (`pi = (1 - test_sens) /
   t_test_turnaround`), adding `t_patient_transfer` where the patient moves
   between a general ward and an isolation bed (to `theta` under P2, to
-  `pi` under P1). As transfer time is added to only one rate, the share
-  of results that are positive differs slightly from `test_sens` under P1
-  and P2 (at 50% sensitivity: 56% P1, 44% P2, 50% P3).
+  `pi` under P3). As transfer time is added to only one rate, the share
+  of results that are positive differs slightly from `test_sens` under P2
+  and P3 (at 50% sensitivity: 50% P1, 44% P2, 56% P3).
 
 Test turnaround time (`t_test_turnaround`, days from test administration
 to result) is a fixed parameter in `Scripts/Model1_ODE_Parameters.R`.
 
 Scenario labels combine a policy code with the coverage and sensitivity
-as percentages, e.g. `P2_confirmed_cov050_sens100` (`P1_susp_conf`,
-`P2_confirmed`, `P3_none`). `example_values` in Section 3 picks the
-example scenarios (by default each policy at coverage and sensitivity of
-50% and 100%, plus a no-testing baseline at 0% coverage and 0%
-sensitivity set in `example_extra`, included once under P3 as the policy
-makes no difference when nobody is tested: 13 scenarios) used for
-time-series plots, annual summaries and the outcome tables.
+as percentages, e.g. `P2_confirmed_cov050_sens100` (`P1_none`,
+`P2_confirmed`, `P3_susp_conf`). `example_settings` in Section 3 lists
+the coverage and sensitivity settings for the example scenarios, in the
+order shown in Sections 9 and 12 (by default 0%/0%, 50%/50%, 100% coverage/50%
+sensitivity, 50% coverage/100% sensitivity and 100%/100%), each run
+under all three policies (15 scenarios). They are used for time-series
+plots, annual summaries and the outcome tables. At 0% coverage nobody is
+tested, so the three policies give the same results (a no-testing
+baseline).
+
+In Section 9, the time-series line and area plots show the policies as columns and
+the settings as rows; in Section 12, the stacked bar plots group the bars by setting, with P1,
+P2 and P3 side by side and the setting label beneath each group.
 
 Grid results are cached in `Outputs/<run_label>/grid_runs.rds` and
 re-used on the next render if the grid, fixed parameters, run settings,
@@ -460,22 +491,38 @@ on 15 cores). Set `grid_n_cores <- 1` to run scenarios one at a time.
 - side-room bed occupancy: none under `"none"`, `Xtreat` under
   `"confirmed"`, and `Xtest + Xtreat` under `"suspected_and_confirmed"`.
 
-Section 12 of the QMD compares the three isolation policies across
-testing coverage and test sensitivity for ten cumulative outcomes (CDI
-cases, hospital-acquired CDI cases, missed CDI cases, discharged CDI
-cases, deaths following CDI, hospital-acquired colonisations, discharged
-colonisations, patient bed-days, side-room patient bed-days and faecal
-specimens tested; defined in `grid_outcome_spec` in
-`Scripts/Model1_ODE_Functions.R`). Each outcome has its own tab with:
+Section 13 of the QMD (outcomes by testing coverage and test sensitivity) compares the three isolation policies across
+testing coverage and test sensitivity, as annual totals. The outcomes
+are defined in `grid_outcome_spec` in `Scripts/Model1_ODE_Functions.R`
+(CDI cases, hospital-onset CDI cases, hospital-acquired CDI cases, missed
+CDI cases, deaths following CDI, hospital-acquired colonisations,
+discharged colonisations, patient bed-days, side-room patient bed-days
+and faecal specimens tested). Only the outcomes whose patterns differ are
+plotted (`plot = TRUE`): CDI cases, missed CDI cases, deaths following
+CDI, patient bed-days, side-room patient bed-days and faecal specimens
+tested. The others follow the same pattern as one of these, so they are
+only tabulated (research question outcomes table, Section 11 policy
+comparison tables, `grid_key_outcomes.csv`), as are the rates per 10,000
+patient bed-days, side-room and missed proportions and missed cases by
+origin (`rate_spec`; `grid_rates.csv`). Hospital-onset CDI is all
+in-hospital C→I progressions (patients admitted colonised plus patients
+colonised in hospital); hospital-acquired CDI is the part attributed to
+hospital-acquired colonisation. Each plotted outcome has its own tab with:
 
 - a line plot of the outcome against test sensitivity, one line for each
   of 0%, 20%, 40%, 60%, 80% and 100% testing coverage
-  (`grid_line_coverage` in `Scripts/Model1_ODE_Functions.R`), faceted by
-  policy with a shared y axis;
-- the same plot as the difference from P1 (P2 or P3 minus P1) at the same
-  coverage and sensitivity;
+  (`grid_line_coverage` in `Scripts/Model1_ODE_Functions.R`; categorical
+  legend, 0% yellow to 100% purple), faceted by policy with a shared y
+  axis;
+- the same plot for the differences from P1 (P2 vs P1, P3 vs P1) at the
+  same coverage and sensitivity, placed under P2 and P3 (the first panel
+  is blank);
 - a heatmap of test sensitivity (x) by testing coverage (y), for every
-  grid value, faceted by policy with a shared colour scale.
+  grid value, faceted by policy with a shared colour scale (yellow lowest,
+  purple highest);
+- a heatmap of the differences between policies (P2 vs P1, P3 vs P1,
+  P3 vs P2; yellow largest negative difference, purple largest positive
+  difference).
 
 At very low test sensitivity (about 10% or below), testing can increase
 CDI, hospital-acquired CDI, missed cases and deaths compared with no
@@ -486,8 +533,8 @@ cycle between FN and Xtest, held back from treatment and isolation and
 kept infectious in hospital for longer. This is intended, to show the
 effect of a low-sensitivity assay.
 
-Section 13 of the QMD shows, for each of the same ten outcomes, the
-number avoided by increasing test sensitivity from `sens_from` (default
+Section 14 of the QMD (change in outcomes due to increasing test sensitivity) shows, for each of the annual outcomes in `grid_outcome_spec`, the
+number avoided per year by increasing test sensitivity from `sens_from` (default
 50%) to `sens_to` (default 80%), by isolation policy and testing
 coverage: value at `sens_from` minus value at `sens_to`, so a negative
 value is an increase. Side-room bed-days are reported the other way
@@ -514,10 +561,25 @@ Implemented safeguards include:
 
 ## Outcomes of interest
 
-All outcomes are derived from cumulative totals over the full model run
-via `make_research_outcomes_table()` in
-`Scripts/Model1_ODE_Functions.R`. The table below sets out how each
-outcome is calculated.
+All outcomes are derived from cumulative totals over the analysis period
+after the burn-in, via `make_research_outcomes_table()` in
+`Scripts/Model1_ODE_Functions.R`; the QMD divides counts and patient-days
+by the length of the analysis period to report them per year. The tables
+below set out how each outcome is calculated.
+
+The research outcomes table also includes:
+
+- CDI cases admitted with CDI (`cum_admitted_infected`) and hospital-onset
+  (`cum_infected_in_hospital`, n and % of all CDI);
+- rates per 10,000 patient bed-days of CDI, hospital-onset CDI,
+  hospital-acquired CDI and faecal specimens tested (count /
+  `hospital_bed_days` × 10,000);
+- missed cases by origin (admitted with CDI, hospital-onset,
+  hospital-acquired). All cases enter the same I compartment and then
+  follow the same rates whatever their origin, so the model cannot track
+  the origin of each missed case: missed cases are apportioned by each
+  origin's share of CDI cases, and the proportion missed is the same for
+  every origin.
 
 ### 1) Case ascertainment
 
@@ -606,7 +668,7 @@ was confirmed.
 
 ------------------------------------------------------------------------
 
-## Research question outcomes table (QMD Section 10)
+## Research question outcomes table (QMD Section 11)
 
 Derive and display all outcomes of interest, as defined in the model
 research questions. Proportions labelled `[1]` do not sum to 1 across
@@ -615,10 +677,14 @@ case ascertainment categories: the gap reflects deaths in Xtest
 cases still unresolved in hospital at the end of the model run.
 Differences labelled `[2]` are discharge minus admission prevalence in
 percentage points (pp); a positive value indicates the hospital is a net
-source.
+source. Missed cases by origin, labelled `[3]`, are apportioned by each
+origin's share of CDI cases (see above).
 
-The QMD displays this table for the example scenarios and saves it for
-every scenario in the grid (`research_outcomes_all.csv`).
+The QMD displays this table, as annual totals, for the example scenarios
+and saves it for every scenario in the grid (`research_outcomes_all.csv`).
+It then shows, for each policy comparison (P2 vs P1, P3 vs P1, P3 vs
+P2), the difference per year in the Section 13 outcomes at the example
+settings.
 
 ------------------------------------------------------------------------
 
@@ -637,29 +703,42 @@ All scenarios in the grid:
 - `stabilisation_summary_states_flows.csv`
 - `final_outcomes_all.csv` (control values, cumulative outcomes and
   patient-days, one row per scenario)
-- `final_outcomes_vs_P1.csv` (differences vs P1 at the same coverage and
-  sensitivity)
-- `grid_key_outcomes.csv` (the ten Section 12 outcomes in long format,
-  with differences vs P1)
-- `research_outcomes_all.csv`
-- `grid_lines_<outcome>.png`, `grid_lines_vs_P1_<outcome>.png`,
-  `grid_heatmap_<outcome>.png`, `grid_lines_all_outcomes.png`
+- `final_outcomes_P2_vs_P1.csv`, `final_outcomes_P3_vs_P1.csv`,
+  `final_outcomes_P3_vs_P2.csv` (differences in every final outcome
+  between policies at the same coverage and sensitivity, totals over the
+  analysis period)
+- `grid_key_outcomes.csv` and `grid_key_outcome_differences.csv` (the
+  Section 13 annual outcomes and their differences between policies, in
+  long format)
+- `grid_rates.csv` (rates per 10,000 patient bed-days, side-room and
+  missed proportions and missed cases per year by origin, long format)
+- `research_outcomes_all.csv` (per year)
+- `grid_lines_<outcome>.png`, `grid_lines_diff_<outcome>.png`,
+  `grid_heatmap_<outcome>.png`, `grid_heatmap_diff_<outcome>.png` (the
+  plotted Section 13 outcomes only)
 - `sensitivity_gain_<from>_to_<to>.csv` and
-  `sensitivity_gain_<from>_to_<to>_<outcome>.png` (Section 13, e.g.
+  `sensitivity_gain_<from>_to_<to>_<outcome>.png` (Section 14, e.g.
   `sensitivity_gain_050_to_080.csv`)
 
 Example scenarios only:
 
 - `solution_<scenario>.csv` (full time series)
-- `annual_summary_all.csv`
+- `annual_summary_all.csv` (every year of the analysis period; the QMD
+  table shows year 1, as every year is the same at steady state)
 - `research_outcomes.csv`
-- `plot_*.png`, including `plot_colonisations_by_source.png` (stacked
-  bar of cumulative hospital-acquired colonisations by source:
-  background acquisition and patient-to-patient transmission from C, I,
-  Xtest, FN and Xtreat), and optionally `combined_landscape_plots.png` (set
-  `make_combined_plot <- TRUE` in Section 11; off by default as it is
-  slow to build)
+- time-series plots (Section 9): `plot_states_lines_facet.png`, `plot_states_lines_facet_noS.png`,
+  `plot_states_area_facet.png`, `plot_states_area_facet_noS.png`,
+  `plot_bed_occupancy.png` (area plot of general ward and side-room
+  beds), `plot_flows_to_C_and_I.png`, `plot_case_ascertainment_line.png`,
+  `plot_deaths_by_state_area_noS.png`, `plot_discharges_by_state_area_noS.png`
+- stacked bar plots of annual totals (Section 12):
+  `plot_colonisations_by_source.png` (background acquisition and
+  patient-to-patient transmission from C, I, Xtest, FN and Xtreat),
+  `plot_testing_bar.png` (first tests and retests),
+  `plot_case_confirmation_bar.png` (confirmed via first test and retest),
+  `plot_missed_cases_bar.png` (untested and false negatives) and
+  `plot_case_outcomes_bar.png` (discharged untreated, recovered after
+  treatment, died following CDI)
 
-The rendered HTML displays the plots from these PNG files, so it needs
-the `Outputs/<run_label>/` folder alongside it. Copy that folder too if
-you move or share the HTML.
+The rendered HTML (`YYMMDD_Model1_ODE_Model_Run_<run_label>.html`) embeds
+these plots, so it can be moved or shared without the `Outputs/` folder.
