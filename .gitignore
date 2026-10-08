@@ -52,6 +52,9 @@ rsconnect/
 Not_in_repo/
 Outputs/
 
+# Quarto supporting files from non-self-contained renders (generated)
+Model1_ODE_Model_Run_files/
+
 # Other file formats
 *.html
 
