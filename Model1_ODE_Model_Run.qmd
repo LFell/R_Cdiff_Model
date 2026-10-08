@@ -16,7 +16,7 @@ params:
 
 This script runs the ODE model for Model 1, which simulates the transmission dynamics of a healthcare-associated pathogen within a hospital setting. The model tracks the flow of patients through various states of colonisation and infection, as well as the impact of testing and isolation practices on case detection and missed cases.
 
-This script uses the ODE function defined in "Model1_ODE_Functions.R" and the parameter sets defined in "Model1_ODE_Parameters.R" to run multiple scenarios (S1-S4) and generates outputs including time series of model states and flows, annual summaries, stabilisation assessments, and final cumulative outcomes. The outputs are saved as CSV files in a labelled subdirectory of `Outputs/` and key results are also presented in tables and plots.
+This script uses the ODE function defined in "Model1_ODE_Functions.R" and the parameter sets defined in "Model1_ODE_Parameters.R" to run a grid of scenarios covering every combination of the control variables, and generates outputs including cumulative outcomes for every scenario, plots comparing the isolation policies across testing coverage and test sensitivity, and time series, stabilisation checks and annual summaries for a small set of example scenarios. The outputs are saved as CSV files in a labelled subdirectory of `Outputs/` and key results are also presented in tables and plots.
 
 ![](Images/260422%20Model%201%20diagram/Slide1.PNG)The model compartments are:\
 - **S (Susceptible)**: Not colonised or infected\
@@ -24,14 +24,83 @@ This script uses the ODE function defined in "Model1_ODE_Functions.R" and the pa
 - **I (Infected)**: Showing symptoms caused by the pathogen\
 - **Xtest (Suspected cases)**: Isolated or on a general ward, awaiting test result\
 - **FN (False negatives)**: Symptomatic patients with a false negative result, not isolated, awaiting re-testing\
-- **Xtreat (Confirmed cases)**: Isolated and receiving treatment, awaiting recovery and discharge\
+- **Xtreat (Confirmed cases)**: Receiving treatment, isolated in a side room (P1 and P2) or on a general ward (P3), awaiting recovery and return to a general ward, or discharge\
 - **D: Dead**: cumulative count of deaths (absorbing state)
 
-The control variables for scenarios are:\
-- **isolate_before_test**: Whether patients are isolated while awaiting test results (TRUE/FALSE)\
-- **prop_I_suspected**: Proportion of infected patients identified as suspected cases\
+The control variables for scenarios are set as vectors in section 3, and every combination is run:\
+- **isolation_policy**: Which patients are isolated in a side room: P1 `"suspected_and_confirmed"` (suspected cases awaiting test results and confirmed cases), P2 `"confirmed"` (confirmed cases only) or P3 `"none"` (neither suspected nor confirmed cases). P2 and P3 are compared against P1.\
+- **prop_I_suspected** (testing coverage): Proportion of CDI cases identified as suspected cases\
 - **test_sens**: Sensitivity of the diagnostic test\
-- **t_test_turnaround**: Time in days between test administration and result availability\
+
+Test turnaround time (`t_test_turnaround`) is a fixed parameter in `Scripts/Model1_ODE_Parameters.R`.
+
+**Note on testing coverage.** The model uses the proportion of CDI cases identified as suspected cases (`prop_I_suspected`) to calculate a case identification rate, the rate of moving from I to Xtest: `gamma = prop_I_suspected / t_identify_suspected` (with `t_patient_transfer` added to the denominator when suspected cases are isolated). Patients can also leave I by discharge or death before they are identified, so the share of infected patients who are actually identified and tested is lower than `prop_I_suspected`: with the default parameters, about 88% at 100% and 78% at 50% when suspected cases are not isolated (85% and 74% when they are). Plots and tables label this control variable "Proportion of CDI cases identified as suspected cases".
+
+**Note on test sensitivity.** The model uses the test sensitivity (`test_sens`) to calculate two rates out of Xtest, taking account of the test turnaround time and, where the patient moves between a general ward and an isolation bed, the patient transfer time:
+
+- confirmed case rate (Xtest → Xtreat): `theta = test_sens / t_test_turnaround`, with `t_patient_transfer` added to the denominator when only confirmed cases are isolated (P2), as the patient moves from the ward to a side room;
+- false negative rate (Xtest → FN): `pi = (1 - test_sens) / t_test_turnaround`, with `t_patient_transfer` added to the denominator when suspected cases are isolated (P1), as the patient moves from a side room back to the ward.
+
+As the transfer time is added to only one of the two rates, the share of results that are positive differs slightly from `test_sens` under P1 and P2 (for example, with the default parameters at 50% sensitivity: 56% under P1, 44% under P2 and 50% under P3).
+
+**Note on missed cases when isolating awaiting the test result.** When `isolation_policy = "suspected_and_confirmed"`, Xtest is a side room, so the rate of moving from I to Xtest (gamma) covers both the time to identify a patient as a suspected case and the time to transfer them to a side room (`t_identify_suspected + t_patient_transfer`). Patients leave I either by moving to Xtest or by being discharged or dying first; discharges and deaths reduce the pool of patients in I available to be identified. Any patient who leaves I by discharge or death is counted as a missed (untested) case, because in the model they do not complete the testing process. This includes a small number of patients who die after being identified as suspected but before transfer, whose test result might in practice be reported after death. Because the combined delay is longer than when suspected cases are not isolated (`t_identify_suspected` only), a slightly larger share of infected patients leaves I before reaching Xtest, so missed untested cases (discharges and deaths from I) are slightly higher when `isolation_policy = "suspected_and_confirmed"`. Total missed cases (which also include false negatives discharged or dying in FN) are often lower under this policy, as isolating suspected cases reduces transmission, so there are fewer CDI cases to miss.
+
+### Model assumptions
+
+Default parameter values are given in brackets; they are set in `Scripts/Model1_ODE_Parameters.R`.
+
+*Pathogen and population*
+
+- A single toxigenic strain is in circulation.
+- The hospital is a single, well-mixed population: there are no separate wards or bays. The model is deterministic and its parameters don't change over time (no seasonality).
+- Patients are not followed after discharge. Readmission is not modelled.
+
+*Admissions and discharges*
+
+- Admissions arrive at a constant rate (133/day). They do not replace discharges, so the hospital census can vary.
+- Admissions are split between S, C and I in fixed proportions reflecting community prevalence (8.6% colonised, 0.2% infected, the rest susceptible). Community prevalence is fixed and isn't affected by discharges from the hospital.
+- Nobody is admitted directly to Xtest or Xtreat.
+- Each state has its own constant discharge rate, set by its length of stay:
+  - S and C: 7 days;
+  - I and FN: 14 days;
+  - Xtreat: 20% of treated patients are discharged and 80% return to a general ward as susceptible, over 14 days (plus 0.5 days' transfer time when isolated).
+- Patients awaiting a test result (Xtest) stay in hospital until the result arrives; they can't be discharged from Xtest.
+- Death rates are constant:
+  - S and C share a baseline rate (0.1% risk over a 7-day stay);
+  - I, Xtest and FN die at 2× the baseline;
+  - Xtreat dies at 1.2× the baseline.
+
+*Colonisation and progression*
+
+- Susceptible patients become colonised through:
+  - background acquisition from spores in the environment, at a constant rate that doesn't depend on the number of patients in each state (β₀ = 0.002);
+  - frequency-dependent transmission from colonised and infected patients (λ = β₀ + Σβₖk/N).
+- Colonised and infected patients all pose a transmission risk:
+  - colonised (C): 0.008;
+  - infected (I) and false negatives (FN): 0.04;
+  - suspected cases (Xtest): 0.04 on a general ward;
+  - confirmed cases on treatment (Xtreat): 0.02 on a general ward.
+- Treatment is assumed to reduce shedding from 0.04 at the start to 0 at the end. The model uses the average over the treatment period (0.02) as a constant rate.
+- Isolation in a side room reduces transmission to 5% of the general-ward value. It does not eliminate it.
+- Progression from C to I is increased by antibiotic exposure among colonised patients (SCI structure, not PSCIX): the progression rate rises by a relative risk of 2 in the 37.3% of colonised patients receiving antibiotics. Without antibiotics, 50% of colonised patients progress, with a mean time to progression of 5 days.
+- Colonised patients can lose colonisation without treatment (5% over 5 days).
+- There is no immunity, and no recurrence or relapse. Patients who recover after treatment return to the susceptible state.
+- Colonised patients are not screened, detected or decolonised.
+
+*Case identification and testing*
+
+- Only infected (symptomatic) patients are identified as suspected cases and tested. Patients in S and C don't develop diarrhoea that leads to testing. The test is assumed 100% specific, so there are no false positives. As a result, "faecal specimens tested" counts only tests of patients with CDI, and underestimates real testing volume.
+- Testing coverage (the proportion of CDI cases identified as suspected cases) sets the identification rate, with a mean time to identification of 2 days from the onset of symptoms. Infected patients can be discharged or die before they're identified, so the share actually tested is lower than the nominal coverage.
+- Test results arrive after a fixed turnaround time (2 days). Each test, including retests, returns a positive result with probability equal to the test sensitivity. Results of repeat tests on the same patient are independent.
+- Patients with a false-negative result return to a general ward (FN), still symptomatic and transmitting. They are retested after a mean of 7 days unless they are discharged or die first.
+- Confirmed cases are treated. Under P1 and P2 they are isolated; under P3 they stay on a general ward.
+- Moving a patient between a general ward and a side room takes 0.5 days. This is added to the rate of any transition that involves such a move.
+- Side-room capacity is unlimited.
+
+*Outcome definitions*
+
+- **Missed cases:** patients who leave I or FN by discharge or death without a confirmed diagnosis. Deaths while awaiting a result in Xtest count as neither missed nor confirmed.
+- **Hospital-acquired CDI:** in-hospital C→I progressions, multiplied by the share of all colonisations that were acquired in hospital. This assumes patients colonised in hospital and those admitted colonised progress at the same rate.
 
 ## 1) Initial setup
 
@@ -51,7 +120,7 @@ dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 ## 2) Source parameters and functions
 
-Source the ODE functions and parameter sets for the model. The functions include the ODE system definition, scenario running function, and various post-processing functions for summarising and plotting results. The parameters script defines the fixed model parameters (e.g., transmission rates, recovery rates) and the `make_mod_parms()` function used to build scenario parameter lists in section 3.
+Source the ODE functions and parameter sets for the model. The functions include the ODE system definition, scenario running functions, and various post-processing functions for summarising and plotting results. The parameters script defines the fixed model parameters (e.g., transmission rates, recovery rates, test turnaround time) and the `make_mod_parms()` function used to build each scenario's parameter list.
 
 ```{r}
 source("Scripts/Model1_ODE_Functions.R")
@@ -60,73 +129,57 @@ source("Scripts/Model1_ODE_Parameters.R")
 
 ## 3) Define scenarios
 
-Set values for the control parameters for each scenario (S1-S4) and create a list of scenario parameters. Also create a combined data frame of all scenario parameters for reference and save it as a CSV.
+Set the values of each control variable as a vector. Every combination of isolation policy, testing coverage and test sensitivity is run (the scenario grid). Scenario labels combine a policy code (`P1_susp_conf`, `P2_confirmed`, `P3_none`) with the coverage and sensitivity as percentages, e.g. `P2_confirmed_cov050_sens100`.
+
+A small set of example scenarios is taken from the grid for the time-series plots, annual summaries and outcome tables (sections 9 to 11): each isolation policy at every combination of the coverage and sensitivity values in `example_values`, plus the scenarios in `example_extra` (by default a no-testing baseline, `P3_none_cov000_sens000`).
 
 ```{r}
-mod.parms.S1 <- make_mod_parms(
-  isolate_before_test = FALSE,
-  prop_I_suspected = 1.00,
-  test_sens = 1.00,
-  t_test_turnaround = 2,
-  scenario_label = "S1"
-)
-mod.parms.S2 <- make_mod_parms(
-  isolate_before_test = FALSE,
-  prop_I_suspected = 1.00,
-  test_sens = 0.50,
-  t_test_turnaround = 2,
-  scenario_label = "S2"
-)
-mod.parms.S3 <- make_mod_parms(
-  isolate_before_test = FALSE,
-  prop_I_suspected = 0.50,
-  test_sens = 1.00,
-  t_test_turnaround = 2,
-  scenario_label = "S3"
-)
-mod.parms.S4 <- make_mod_parms(
-  isolate_before_test = FALSE,
-  prop_I_suspected = 0.50,
-  test_sens = 0.50,
-  t_test_turnaround = 2,
-  scenario_label = "S4"
-)
+# Control variables: every combination is run
+isolation_policy <- c("suspected_and_confirmed", "confirmed", "none")   # P1, P2, P3
+prop_I_suspected <- seq(0, 100, by = 10) / 100   # testing coverage
+test_sens        <- seq(0, 100, by = 10) / 100
 
-scenario_parms <- list(S1 = mod.parms.S1,
-                       S2 = mod.parms.S2,
-                       S3 = mod.parms.S3,
-                       S4 = mod.parms.S4)
+scenario_grid <- make_scenario_grid(isolation_policy, prop_I_suspected, test_sens)
 
-all_parms <- bind_rows(
-  S1 = as_tibble(mod.parms.S1),
-  S2 = as_tibble(mod.parms.S2),
-  S3 = as_tibble(mod.parms.S3),
-  S4 = as_tibble(mod.parms.S4),
-  .id = "scenario"
+# Example scenarios (must be values in the vectors above)
+example_values <- c(0.5, 1)
+
+# Extra example scenarios, as isolation policy, coverage and sensitivity. The default is a
+# no-testing baseline (0% coverage, 0% sensitivity): nobody is tested, so the isolation policy
+# makes no difference and it is included once, under P3 (no isolation).
+example_extra <- tibble(isolation_policy = "none", prop_I_suspected = 0, test_sens = 0)
+
+example_grid <- bind_rows(
+  scenario_grid |> semi_join(example_extra, by = c("isolation_policy", "prop_I_suspected", "test_sens")),
+  scenario_grid |> filter(prop_I_suspected %in% example_values, test_sens %in% example_values)
 )
+if (nrow(example_grid) == 0) stop("No example scenarios found: check example_values are in the grid.")
 
-write_csv(all_parms,
-          file.path(output_dir, "model_parameters_all_scenarios.csv"))
-
-control_parms <- all_parms |>
-  select(scenario, isolate_before_test, prop_I_suspected, test_sens, t_test_turnaround)
-
+control_parms <- scenario_grid |>
+  mutate(t_test_turnaround = fixed$t_test_turnaround)
 write_csv(control_parms,
           file.path(output_dir, "scenario_control_parameters.csv"))
+
+cat("Scenario grid:", nrow(scenario_grid), "scenarios (",
+    length(isolation_policy), "policies x", length(prop_I_suspected), "coverage values x",
+    length(test_sens), "sensitivity values). Example scenarios:", nrow(example_grid), "\n")
 ```
 
 ## 4) Model settings
 
-Set the total model run time and time step for the ODE solver. Validate that the settings are appropriate (e.g., time step is positive and less than model time). Create a sequence of time points for the model output.
+Set the total model run time, the time step for the ODE solver and the burn-in period. The burn-in is the period at the start of the run while the model moves from its initial conditions to steady state; it is excluded from all cumulative totals, patient-days and annual summaries, which cover the analysis period after it. The burn-in is the same for every scenario, so all totals cover the same length of time (here a 1-year burn-in and a 5-year analysis period, in a 6-year run). Section 8 checks that every scenario has stabilised before the end of the burn-in. Validate that the settings are appropriate (all positive, the time step smaller than the model time, and the burn-in shorter than the model time). Create a sequence of time points for the model output.
 
 ```{r}
 run_settings <- list(
-  model_time = 365 * 5,
-  time_step  = 0.5
+  model_time = 365 * 6,
+  time_step  = 0.5,
+  burn_in    = 365
 )
-validate_run_settings(run_settings$model_time, run_settings$time_step)
+validate_run_settings(run_settings$model_time, run_settings$time_step, run_settings$burn_in)
 model_time <- run_settings$model_time
 time_step  <- run_settings$time_step
+burn_in    <- run_settings$burn_in
+analysis_years <- (model_time - burn_in) / 365
 mod.t      <- seq(0, model_time, by = time_step)
 ```
 
@@ -155,23 +208,61 @@ mod.init <- c(
 
 ## 6) Run scenarios
 
-Run the ODE model for each scenario using the `run_scenario` function, which takes the scenario parameters and returns a data frame of model states and flows over time. Then, post-process the raw model output to add flow quantities (e.g., cumulative cases, missed cases) using the `add_quantities` function. Finally, save the post-processed outputs as CSV files in the output directory.
+Run the ODE model for every scenario in the grid using `run_scenario_grid()`. Each run is post-processed with `add_quantities()`, which multiplies each output row by the time step to give per-step flows and patient-days (rows in the burn-in, including time 0, are given zero width, so cumulative totals cover exactly the analysis period after the burn-in), and immediately summarised (parameters, final cumulative outcomes, patient-days, stabilisation and any negative values), so full time series are not kept for the whole grid.
+
+The grid results are cached in `grid_runs.rds` in the output folder. They are re-used on the next render if the scenario grid, fixed parameters, run settings, initial conditions and the model, parameter, validation, grid-running and post-processing functions are unchanged; otherwise the grid is re-run. Set `grid_clear_cache <- TRUE` to force a re-run. The grid runs in parallel on `grid_n_cores` CPU cores (default: all physical cores but one); set it to 1 to run one scenario at a time in this session.
+
+The example scenarios are then re-run to keep their full time series, which are saved as `solution_<scenario>.csv`.
 
 ```{r}
+grid_clear_cache <- FALSE
+grid_cache_file  <- file.path(output_dir, "grid_runs.rds")
 
-# Run the ODE model
+# Number of CPU cores used to run the grid in parallel (1 = run in this session, one at a time)
+grid_n_cores <- max(1, parallel::detectCores(logical = FALSE) - 1)
 
-scenario_raw  <- lapply(scenario_parms, run_scenario)
-
-# Post-process the raw model output to add flow quantities (e.g., cumulative cases, missed cases)
-scenario_post <- Map(
-  f = function(df, parms)
-    df %>% add_quantities(time_step = time_step),
-  df = scenario_raw,
-  parms = scenario_parms
+grid_cache_key <- list(
+  scenario_grid = scenario_grid,
+  fixed         = fixed,
+  run_settings  = run_settings,
+  mod.init      = mod.init,
+  code          = lapply(list(Model1A_ODE, make_mod_parms, prob2rate, validate_fixed_parameters,
+                              validate_scenario_inputs, validate_rate_parameters, run_scenario,
+                              run_scenario_grid, add_quantities, make_final_outcomes,
+                              calculate_total_patient_days, stabilisation_summary,
+                              find_stabilisation_day, negative_value_rows), deparse)
 )
 
-# Save the post-processed outputs as CSV files in the output directory
+grid_cache <- if (!grid_clear_cache && file.exists(grid_cache_file)) readRDS(grid_cache_file) else NULL
+
+if (!is.null(grid_cache) && identical(grid_cache$key, grid_cache_key)) {
+  grid_runs <- grid_cache$runs
+  cat("Loaded scenario grid results from", grid_cache_file, "\n")
+} else {
+  grid_runs <- run_scenario_grid(scenario_grid, time_step, burn_in = burn_in, n_cores = grid_n_cores)
+  saveRDS(list(key = grid_cache_key, runs = grid_runs), grid_cache_file)
+  cat("Ran", nrow(scenario_grid), "scenarios and saved results to", grid_cache_file, "\n")
+}
+
+# One row per scenario: control values, final cumulative outcomes and patient-days
+grid_results <- make_grid_results(scenario_grid, grid_runs)
+
+# Long format for the outcomes compared across the grid (section 12), with differences vs P1
+grid_long <- make_grid_outcomes_long(grid_results)
+
+write_csv(grid_runs$parms,
+          file.path(output_dir, "model_parameters_all_scenarios.csv"))
+write_csv(grid_runs$patient_days, file.path(output_dir, "patient_days_summary.csv"))
+
+# Example scenarios: re-run and keep full time series
+example_parms <- pmap(example_grid, \(scenario, isolation_policy, prop_I_suspected, test_sens)
+  make_mod_parms(isolation_policy = isolation_policy,
+                 prop_I_suspected = prop_I_suspected,
+                 test_sens        = test_sens,
+                 scenario_label   = scenario)) |>
+  set_names(example_grid$scenario)
+
+scenario_post <- lapply(example_parms, \(p) run_scenario(p) |> add_quantities(time_step = time_step, burn_in = burn_in))
 
 walk2(scenario_post,
       names(scenario_post),
@@ -179,44 +270,26 @@ walk2(scenario_post,
         output_dir, paste0("solution_", .y, ".csv")
       )))
 
-# Patient-days table for each scenario
+# Patient-days table for the example scenarios
+patient_days_summary <- grid_runs$patient_days |>
+  filter(scenario %in% example_grid$scenario)
 
-patient_days_summary <- bind_rows(
-  lapply(scenario_post, calculate_total_patient_days),
-  .id = "scenario"
-)
-write_csv(patient_days_summary, file.path(output_dir, "patient_days_summary.csv"))
-
-knitr::kable(patient_days_summary, caption = "Patient-days by compartment and bed type (integrated over run)")
-
+knitr::kable(patient_days_summary, caption = "Patient-days by compartment and bed type (integrated over run), example scenarios")
 ```
 
 ## 7) Negative values checks
 
-Check for any negative values in the model states or flows, which may indicate numerical issues with the ODE solver or problems with the model structure. The `negative_value_rows` function identifies rows in the data frame where any state or flow has a negative value. Save these rows as separate CSV files for each scenario for further investigation.
+Check for any negative values in the model states or flows, which may indicate numerical issues with the ODE solver or problems with the model structure. The `negative_value_rows` function identifies rows in the data frame where any state or flow has a negative value. This is checked for every scenario in the grid, and all negative rows are saved to one CSV for further investigation.
 
 ```{r}
-neg_tables <- lapply(scenario_post, negative_value_rows)
-names(neg_tables) <- names(scenario_post)
-
-# Attach scenario column
-neg_tables_tagged <- Map(
-  function(df, scn) {
-    if (nrow(df) > 0) df$scenario <- scn
-    df
-  },
-  neg_tables,
-  names(neg_tables)
-)
-
-# Combine all scenario negatives
-neg_combined <- bind_rows(neg_tables_tagged)
+neg_combined <- grid_runs$negatives
 
 # Output to screen
 if (nrow(neg_combined) > 0) {
-  knitr::kable(neg_combined, caption = "All negative model output rows across scenarios")
+  knitr::kable(count(neg_combined, scenario, name = "negative_rows"),
+               caption = "Scenarios with negative model output rows")
 } else {
-  cat("No negative values found in any scenario.\n")
+  cat("No negative values found in any of the", nrow(scenario_grid), "scenarios.\n")
 }
 
 # Save as CSV
@@ -225,149 +298,356 @@ write_csv(neg_combined, file.path(output_dir, "all_negative_rows_combined.csv"))
 
 ## 8) Stabilisation summary
 
-Identify the day on which each model state and flow stabilises for each scenario using the `stabilisation_summary` function. This function determines when the values of states and flows reach a steady state (i.e., change by less than a certain threshold over a specified number of days). Combine the stabilisation summaries for all scenarios into a single data frame, save it as a CSV, and display it in a table format.
+Identify the day on which the model states stabilise for every scenario in the grid using the `stabilisation_summary` function. This function determines when the values of the states reach a steady state (i.e., change by less than a tolerance of 1e-4 per time step for a specified number of consecutive time steps). Note that the `consecutive_days` setting and output column count time steps, not days: the default of 10 is 10 half-day steps, i.e. 5 days. The full summary for all scenarios is saved as a CSV; the table shows the example scenarios. Every scenario should stabilise before the end of the burn-in (section 4), so that the cumulative totals cover steady-state behaviour only; any scenario that does not is listed below, and the burn-in should then be lengthened. The longest stabilisation period across the example scenarios sets the time window for the time-series plots in section 11, which therefore show the approach to steady state during the burn-in.
 
 ```{r}
-stability_all <- bind_rows(
-  stabilisation_summary(scenario_post$S1, "S1"),
-  stabilisation_summary(scenario_post$S2, "S2"),
-  stabilisation_summary(scenario_post$S3, "S3"),
-  stabilisation_summary(scenario_post$S4, "S4")
-)
-longest_stabilisation <- max(stability_all$stabilisation_day, na.rm = TRUE)
+stability_all <- grid_runs$stability
 write_csv(stability_all,
           file.path(output_dir, "stabilisation_summary_states_flows.csv"))
-knitr::kable(stability_all, caption = "Stabilisation: model states and flows")
+
+not_stabilised <- stability_all |> filter(!stabilised) |> pull(scenario)
+cat(sum(stability_all$stabilised), "of", nrow(stability_all),
+    "scenarios stabilised; latest stabilisation day across the grid:",
+    max(stability_all$stabilisation_day, na.rm = TRUE), "\n")
+if (length(not_stabilised) > 0) {
+  cat("Not stabilised within the run:", paste(not_stabilised, collapse = ", "), "\n")
+}
+
+# Check every scenario stabilised before the end of the burn-in
+late_stabilisation <- stability_all |>
+  filter(!stabilised | stabilisation_day > burn_in) |>
+  pull(scenario)
+if (length(late_stabilisation) == 0) {
+  cat("All scenarios stabilised before the end of the", burn_in, "day burn-in.\n")
+} else {
+  warning(length(late_stabilisation), " scenario(s) did not stabilise before the end of the burn-in.")
+  cat("WARNING: not stabilised before the end of the", burn_in, "day burn-in:",
+      paste(late_stabilisation, collapse = ", "), "\n")
+}
+
+stability_examples <- stability_all |> filter(scenario %in% example_grid$scenario)
+longest_stabilisation <- max(stability_examples$stabilisation_day, na.rm = TRUE)
+knitr::kable(stability_examples, caption = "Stabilisation: model states and flows, example scenarios")
 ```
 
 ## 9) Annual summary tables
 
-Create annual summary tables for each scenario using the `make_annual_summary` function, which calculates annual totals for flow quantities and mean values for model states. Combine the annual summaries for all scenarios into a single data frame, save it as a CSV, and display it in a table format.
+Create annual summary tables for each example scenario using the `make_annual_summary` function, which calculates annual totals for flow quantities and patient-days. Years are counted from the end of the burn-in (year 1 is the first year of the analysis period); the burn-in is excluded. Combine the annual summaries into a single data frame, save it as a CSV, and display it in a table format.
 
 ```{r}
-annual_summary_all <- bind_rows(
-  make_annual_summary(scenario_post$S1, "S1"),
-  make_annual_summary(scenario_post$S2, "S2"),
-  make_annual_summary(scenario_post$S3, "S3"),
-  make_annual_summary(scenario_post$S4, "S4")
-)
+annual_summary_all <- bind_rows(Map(make_annual_summary, scenario_post, names(scenario_post)))
 write_csv(annual_summary_all,
           file.path(output_dir, "annual_summary_all.csv"))
-knitr::kable(annual_summary_all, caption = "Annual summary (post burn-in period)")
+knitr::kable(annual_summary_all, caption = "Annual summary, example scenarios")
 ```
 
-## 10) Final cumulative outcomes table
+## 10) Final cumulative outcomes and research question outcomes
 
-Create a table of final cumulative outcomes for each scenario using the `make_final_outcomes` function, which extracts the end states and cumulative flows at the end of the model run. Then, create a table comparing the final outcomes of each scenario to the base scenario (S1) using the `make_final_outcomes_vs_base` function. Save both tables as CSV files and display them in table format.
+Final cumulative outcomes for every scenario in the grid are saved as CSVs:
 
-```{r}
-final_outcomes         <- make_final_outcomes(scenario_post)
-final_outcomes_vs_base <- make_final_outcomes_vs_base(final_outcomes, base_scenario = "S1")
-write_csv(final_outcomes,
-          file.path(output_dir, "final_outcomes_all.csv"))
-write_csv(final_outcomes_vs_base,
-          file.path(output_dir, "final_outcomes_vs_base.csv"))
-knitr::kable(final_outcomes, caption = "Model end states and cumulative flows")
-knitr::kable(final_outcomes_vs_base, caption = "Difference vs base scenario S1")
-```
+- `final_outcomes_all.csv`: all cumulative outcomes from `make_final_outcomes`, joined to the control values and patient-days
+- `final_outcomes_vs_P1.csv`: differences from P1 (suspected and confirmed cases isolated) at the same testing coverage and test sensitivity
+- `grid_key_outcomes.csv`: the outcomes plotted in section 12, with their differences vs P1, in long format
+- `research_outcomes_all.csv`: the research question outcomes table (below) for every scenario
 
-## 11) Research question outcomes
-
-Derive and display all outcomes of interest, as defined in the model research questions. Proportions labelled `[1]` do not sum to 1 across case ascertainment categories: the gap reflects deaths in Xtest (patients tested but who died before their result was acted on) and cases still unresolved in hospital at the end of the model run. Differences labelled `[2]` are discharge minus admission prevalence in percentage points (pp); a positive value indicates the hospital is a net source.
+The tables show the example scenarios: first all outcomes of interest, as defined in the model research questions, then the difference vs P1 for the outcomes compared in section 12 (P2 or P3 minus P1; a positive value means more of the outcome than under P1). In the first table, proportions labelled `[1]` do not sum to 1 across case ascertainment categories: the gap reflects deaths in Xtest (patients tested but who died before their result was acted on) and cases still unresolved in hospital at the end of the model run. Differences labelled `[2]` are discharge minus admission prevalence in percentage points (pp); a positive value indicates the hospital is a net source.
 
 ```{r}
-research_outcomes <- make_research_outcomes_table(final_outcomes, patient_days_summary)
+final_outcomes <- grid_runs$final
+write_csv(grid_results, file.path(output_dir, "final_outcomes_all.csv"))
+write_csv(grid_long,    file.path(output_dir, "grid_key_outcomes.csv"))
+
+# Differences vs the reference policy (P1) with the same coverage and sensitivity
+if (reference_policy %in% isolation_policy) {
+  final_outcomes_vs_P1 <- grid_results |>
+    select(scenario, isolation_policy, prop_I_suspected, test_sens) |>
+    left_join(final_outcomes, by = "scenario") |>
+    group_by(prop_I_suspected, test_sens) |>
+    group_modify(\(df, key) {
+      base <- df$scenario[df$isolation_policy == reference_policy]
+      df |>
+        select(-isolation_policy) |>
+        make_final_outcomes_vs_base(base_scenario = base) |>
+        rename_with(\(x) sub(paste0("_vs_", base, "$"), "_vs_P1", x))
+    }) |>
+    ungroup() |>
+    relocate(scenario)
+  write_csv(final_outcomes_vs_P1, file.path(output_dir, "final_outcomes_vs_P1.csv"))
+}
+
+# Research question outcomes
+example_final_outcomes <- final_outcomes |> filter(scenario %in% example_grid$scenario)
+
+research_outcomes <- make_research_outcomes_table(example_final_outcomes, patient_days_summary)
 write_csv(research_outcomes, file.path(output_dir, "research_outcomes.csv"))
-knitr::kable(research_outcomes, caption = "Outcomes of interest by scenario")
+write_csv(make_research_outcomes_table(final_outcomes, grid_runs$patient_days),
+          file.path(output_dir, "research_outcomes_all.csv"))
+knitr::kable(research_outcomes, caption = "Outcomes of interest, example scenarios")
+
+# Difference vs P1 for the section 12 outcomes: outcomes as rows, scenarios as columns
+if (reference_policy %in% isolation_policy) {
+  grid_long |>
+    filter(scenario %in% example_grid$scenario, isolation_policy != reference_policy) |>
+    arrange(isolation_policy, prop_I_suspected, test_sens) |>
+    mutate(Outcome = grid_outcome_spec$label[match(outcome, grid_outcome_spec$variable)],
+           value   = scales::comma(round(diff_vs_ref), style_positive = "plus")) |>
+    select(Outcome, scenario, value) |>
+    pivot_wider(names_from = scenario, values_from = value) |>
+    knitr::kable(caption = "Difference vs P1 (suspected and confirmed cases isolated) at the same coverage and sensitivity, example scenarios")
+}
 ```
 
-## 12) Plots
+## 11) Plots for the example scenarios
 
-Create a series of plots to visualise the model states and flows over time, as well as the final outcomes. The plotting functions take the long-format data frames of states and flows, as well as the final outcomes, and generate ggplot objects. Save each plot as a PNG file in the output directory.
+Create a series of plots to visualise the model states and flows over time, as well as the final outcomes, for the example scenarios. The plotting functions take the long-format data frames of states and flows, as well as the final outcomes, and generate ggplot objects. Save each plot as a PNG file in the output directory.
+
+The stacked bar plot of cumulative hospital-acquired colonisations by source separates background acquisition (`beta0`) from patient-to-patient transmission (secondary colonisations) from each state (C, I, Xtest, FN, Xtreat). These are colonisations, not CDI cases. **Note:** for modelling simplicity, the background acquisition rate does not depend on the number of patients in each state.
 
 ```{r}
+#| label: example-plots-save
+
 # Generate input data for plots
 plot_long_states <- make_plot_long_states(scenario_post, longest_stabilisation)
-plot_long_bed_occupancy <-make_plot_long_bed_occupancy(scenario_post, longest_stabilisation)
+plot_long_bed_occupancy <- make_plot_long_bed_occupancy(scenario_post, longest_stabilisation)
 plot_long_flows  <- make_plot_long_flows(scenario_post)
 
-# Core state plots
-p_states_line             <- plot_states_line(plot_long_states)
-p_states_line_noS         <- plot_states_line_noS(plot_long_states)
-p_states_area             <- plot_states_area(plot_long_states)
-p_states_area_noS         <- plot_states_area_noS(plot_long_states)
+# Angle scenario labels on bar plots so the example scenario names do not overlap
+angled_x <- theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# Bed occupancy
-p_bed_occupancy           <- plot_bed_occupancy(plot_long_bed_occupancy, longest_stabilisation)
-p_cumulative_bed_occupancy<- plot_cumulative_bed_occupancy(patient_days_summary)
-
-# Flows and ascertainment
-p_flows_to_C_and_I        <- plot_flows_to_C_and_I(plot_long_flows, longest_stabilisation, final_outcomes)
-p_case_ascertainment_line <- plot_case_ascertainment_line(plot_long_flows, longest_stabilisation)
-p_case_ascertainment_bar  <- plot_case_ascertainment_bar(final_outcomes)
-
-# Testing and confirmations
-p_testing_bar             <- plot_testing_bar(final_outcomes)
-p_case_confirmation_bar   <- plot_case_confirmation_bar(final_outcomes)
-
-# Missed cases, deaths, discharges, cumulative outcomes
-p_missed_cases_bar        <- plot_missed_cases_bar(final_outcomes)
-p_deaths_by_state_area_noS     <- plot_deaths_by_state_area_noS(plot_long_flows, longest_stabilisation)
-p_discharges_by_state_area_noS <- plot_discharges_by_state_area_noS(plot_long_flows, longest_stabilisation)
-p_case_outcomes_bar       <- plot_case_outcomes_bar(final_outcomes)
-
-# Scenario parameters
-p_scenario_params         <- plot_scenario_params(control_parms)
+# Plots, in display order: file name (without .png), tab title and plot
+example_plots <- tribble(
+  ~file,                            ~title,                                 ~plot,
+  "plot_scenario_params",           "Scenario control values",              plot_scenario_params(example_grid),
+  "plot_states_lines_facet",        "States",                               plot_states_line(plot_long_states),
+  "plot_states_lines_facet_noS",    "States (excluding S)",                 plot_states_line_noS(plot_long_states),
+  "plot_states_area_facet",         "States (area)",                        plot_states_area(plot_long_states),
+  "plot_states_area_facet_noS",     "States (area, excluding S)",           plot_states_area_noS(plot_long_states),
+  "plot_bed_occupancy",             "Bed occupancy",                        plot_bed_occupancy(plot_long_bed_occupancy, longest_stabilisation),
+  "plot_cumulative_bed_occupancy",  "Cumulative bed-days",                  plot_cumulative_bed_occupancy(patient_days_summary) + angled_x,
+  "plot_flows_to_C_and_I",          "New colonisations and infections",     plot_flows_to_C_and_I(plot_long_flows, longest_stabilisation, example_final_outcomes),
+  "plot_colonisations_by_source",   "Colonisations by source",              plot_colonisation_sources_bar(example_final_outcomes),
+  "plot_case_ascertainment_line",   "Case ascertainment",                   plot_case_ascertainment_line(plot_long_flows, longest_stabilisation),
+  "plot_case_ascertainment_bar",    "Cumulative case ascertainment",        plot_case_ascertainment_bar(example_final_outcomes) + angled_x,
+  "plot_testing_bar",               "Testing",                              plot_testing_bar(example_final_outcomes) + angled_x,
+  "plot_case_confirmation_bar",     "Confirmation (first test vs retest)",  plot_case_confirmation_bar(example_final_outcomes) + angled_x,
+  "plot_missed_cases_bar",          "Missed cases",                         plot_missed_cases_bar(example_final_outcomes) + angled_x,
+  "plot_case_outcomes_bar",         "Case outcomes",                        plot_case_outcomes_bar(example_final_outcomes) + angled_x,
+  "plot_deaths_by_state_area_noS",  "Deaths by state",                      plot_deaths_by_state_area_noS(plot_long_flows, longest_stabilisation),
+  "plot_discharges_by_state_area_noS", "Discharges by state",               plot_discharges_by_state_area_noS(plot_long_flows, longest_stabilisation)
+) |>
+  mutate(width  = if_else(file == "plot_colonisations_by_source", 20, 15),
+         height = if_else(file == "plot_colonisations_by_source", 10, 8),
+         path   = file.path(output_dir, paste0(file, ".png")))
 
 # Save plots to files
-ggsave(file.path(output_dir, "plot_states_lines_facet.png"),         p_states_line,              width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_states_lines_facet_noS.png"),     p_states_line_noS,          width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_states_area_facet.png"),          p_states_area,              width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_states_area_facet_noS.png"),      p_states_area_noS,          width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_flows_to_C_and_I.png"),           p_flows_to_C_and_I,         width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_case_ascertainment_line.png"),    p_case_ascertainment_line,  width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_case_ascertainment_bar.png"),     p_case_ascertainment_bar,   width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_testing_bar.png"),                p_testing_bar,              width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_case_confirmation_bar.png"),      p_case_confirmation_bar,    width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_missed_cases_bar.png"),           p_missed_cases_bar,         width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_deaths_by_state_area_noS.png"),        p_deaths_by_state_area_noS,      width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_discharges_by_state_area_noS.png"),    p_discharges_by_state_area_noS,  width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_case_outcomes_bar.png"),          p_case_outcomes_bar,        width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_bed_occupancy.png"),              p_bed_occupancy,            width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_cumulative_bed_occupancy.png"),   p_cumulative_bed_occupancy, width = 15, height = 8, dpi = 300, units = "cm")
-ggsave(file.path(output_dir, "plot_scenario_params.png"),            p_scenario_params,          width = 15, height = 8, dpi = 300, units = "cm")
+pwalk(example_plots, \(path, plot, width, height, ...)
+  ggsave(path, plot, width = width, height = height, dpi = 300, units = "cm"))
 
-# Print the plots inline in quarto/HTML document for visual review
-
-combined_plot <- plot_grid(
-p_states_line,
-p_states_line_noS,
-p_flows_to_C_and_I,
-p_scenario_params,
-
-p_states_area,
-p_states_area_noS,
-p_bed_occupancy,
-p_cumulative_bed_occupancy,
-
-p_case_ascertainment_line,
-p_discharges_by_state_area_noS,
-p_deaths_by_state_area_noS,
-p_case_ascertainment_bar,
-
-p_testing_bar,
-p_case_confirmation_bar,
-p_missed_cases_bar,
-p_case_outcomes_bar,
-ncol = 4)
-
-# Save the combined plot to a wide (landscape) page
-ggsave(file.path(output_dir, "combined_landscape_plots.png"),
-       combined_plot, width = 32, height = 18, units = "cm", dpi = 300)
-
-# To show inline
-combined_plot
-
+# Optional: all plots except colonisations by source on one landscape page (slow to build, so off by default)
+make_combined_plot <- FALSE
+if (make_combined_plot) {
+  combined_plot <- plot_grid(
+    plotlist = example_plots |> filter(file != "plot_colonisations_by_source") |> pull(plot),
+    ncol = 4)
+  ggsave(file.path(output_dir, "combined_landscape_plots.png"),
+         combined_plot, width = 32, height = 18, units = "cm", dpi = 300)
+}
 ```
+
+The tabs show the saved PNG files.
+
+::: panel-tabset
+```{r}
+#| label: example-plots-tabs
+#| echo: false
+#| results: asis
+for (i in seq_len(nrow(example_plots))) {
+  cat("\n\n### ", example_plots$title[i], "\n\n", sep = "")
+  cat("![](", example_plots$path[i], "){width=100%}\n\n", sep = "")
+}
+```
+:::
+
+## 12) Isolation policy comparison across testing coverage and test sensitivity
+
+Compare the three isolation policies across every combination of testing coverage and test sensitivity in the grid. Each outcome is the cumulative total over the analysis period (`r analysis_years` years, after a `r burn_in`-day burn-in). Outcome definitions:
+
+- **Hospital-acquired CDI cases**: in-hospital progressions to CDI attributed to hospital-acquired colonisation (in proportion to the share of all colonisations acquired in hospital); this excludes CDI in patients admitted already colonised.
+- **Missed CDI cases**: patients who leave I or FN by discharge or death without a confirmed diagnosis.
+- **Discharged CDI cases (untreated)**: discharges from I and FN. Treated patients discharged from Xtreat are counted as recovered.
+
+Each tab shows one outcome, as:
+
+1. **Line plot**: outcome against test sensitivity, with one line for each of 0%, 20%, 40%, 60%, 80% and 100% testing coverage (`grid_line_coverage`), and the same y axis for each isolation policy.
+2. **Difference vs P1**: the same, for P2 and P3 minus P1 (suspected and confirmed cases isolated) at the same testing coverage and test sensitivity. A positive value means more of the outcome than under P1. This shows the effect of each isolation policy more clearly than the totals, which are dominated by the differences across coverage.
+3. **Heatmap**: test sensitivity (x) by testing coverage (y), for every grid value, with one colour scale shared across the policies.
+
+At 0% testing coverage no patients are tested, so test sensitivity has no effect and the line is flat.
+
+**Note on very low test sensitivity.** At low sensitivity (roughly 10% or below), testing can increase CDI, hospital-acquired CDI, missed cases and deaths compared with no testing. Most tested patients receive a false negative result and return to the general ward (FN), where they continue to transmit at `betaI`. They are retested after `t_wait_retest` days, which is sooner than the typical time to discharge, so many cycle repeatedly between FN and awaiting a result (Xtest). There is no discharge from Xtest, so each retest also keeps them in hospital for longer. These patients are held back from treatment (and, for confirmed cases, isolation), and are kept infectious in hospital for longer than untested patients. This is intended: it shows the effect of testing with a low-sensitivity assay.
+
+**Note on differences between isolation policies at low test sensitivity.** At 0% testing coverage, nobody is identified as a suspected case, so no patients reach Xtest or Xtreat and the three policies give identical results. With coverage above 0% and low sensitivity, there are more CDI cases (and hospital-acquired CDI and colonisations) under P2 and P3 than under P1. This is not because infected patients stay longer in I: identified patients leave I sooner than without testing (I patient-days fall sharply). The extra transmission happens after they leave I, while they cycle between awaiting a result (Xtest) and false negatives on the ward (FN):
+
+- Under P2 and P3, suspected cases wait for their result on a general ward and transmit at the full `betaI`. Under P1 they wait in a side room and transmit at `betaI * beta_mult_isolated`. With repeated retesting, patients spend many days in Xtest, so this difference drives most of the gap: at 100% coverage and 0% sensitivity, colonisations from Xtest are about `r scales::comma(signif(grid_results$cum_colonised_from_Xtest[grid_results$isolation_policy == "none" & grid_results$prop_I_suspected == 1 & grid_results$test_sens == 0], 2))` under P2 and P3 and about `r scales::comma(signif(grid_results$cum_colonised_from_Xtest[grid_results$isolation_policy == "suspected_and_confirmed" & grid_results$prop_I_suspected == 1 & grid_results$test_sens == 0], 2))` under P1.
+- Under P1, the patient transfer time is added to the false negative rate (`pi`) and the retest rate (`sigma`), so each cycle has a longer (isolated) spell in Xtest and patients spend less time as FN on the ward, which reduces colonisations from FN as well.
+- From about 10% sensitivity, some cases are confirmed. P3 is then higher than P2, because confirmed cases (Xtreat) are treated on a general ward and transmit at `betaXtreat` rather than `betaXtreat * beta_mult_isolated`.
+
+```{r}
+#| label: note-values
+#| include: false
+# Helpers for the figures quoted in the notes in sections 12 and 13 (calculated from the grid so
+# they stay correct if parameters change)
+P1 <- "suspected_and_confirmed"; P2 <- "confirmed"; P3 <- "none"
+on_grid <- function(df, pol, cov, sens) {
+  df$isolation_policy == pol & abs(df$prop_I_suspected - cov) < 1e-6 & abs(df$test_sens - sens) < 1e-6
+}
+# Value of a final outcome column for one scenario
+gval <- function(var, pol, cov, sens) grid_results[[var]][on_grid(grid_results, pol, cov, sens)]
+# Share of test results that are positive, theta / (theta + pi + mortXtest)
+pos_share <- function(pol, sens, cov = 1) {
+  p <- grid_runs$parms[on_grid(grid_runs$parms, pol, cov, sens), ]
+  p$theta / (p$theta + p$pi + p$mortXtest)
+}
+n0 <- function(x) scales::comma(round(x))
+n0p <- function(x) scales::comma(round(x), style_positive = "plus")
+pc <- function(x) scales::percent(x, accuracy = 1)
+
+# Missed CDI cases at 100% coverage: P2 minus P1 by sensitivity
+miss_gap <- tibble(sens = sort(unique(grid_results$test_sens))) |>
+  mutate(gap_P2 = map_dbl(sens, \(s) gval("cum_total_missed_cases", P2, 1, s) -
+                                     gval("cum_total_missed_cases", P1, 1, s)))
+miss_peak_sens  <- miss_gap$sens[which.max(miss_gap$gap_P2)]
+miss_cross_sens <- min(miss_gap$sens[miss_gap$gap_P2 < 0])
+```
+
+**Note on missed CDI cases.** Missed cases are patients who are discharged or die without a confirmed diagnosis: untested (from I) or after a false negative result (from FN). The figures below are at 100% testing coverage.
+
+- **More missed cases under P2 and P3 at low sensitivity.** At low sensitivity most missed cases are false negatives, and P2 and P3 have more than P1 for two reasons. First, there are more CDI cases to miss, as suspected cases wait for their result on a general ward and transmit at the full `betaI`: at 0% sensitivity, there are `r n0(gval("cum_total_infected_incidence", P2, 1, 0) - gval("cum_total_infected_incidence", P1, 1, 0))` more CDI cases under P2 and P3 than under P1. Second, there are fewer positive results per test: the patient transfer time slows the false negative rate under P1 and the confirmed case rate under P2 (see the note on test sensitivity in the introduction), so at 10% sensitivity `r pc(pos_share(P1, 0.1))` of results are positive under P1, `r pc(pos_share(P2, 0.1))` under P2 and `r pc(pos_share(P3, 0.1))` under P3.
+- **Fewer missed cases under P2 and P3 at high sensitivity.** From `r pc(miss_cross_sens)` sensitivity, P2 has fewer missed cases than P1. False negatives become rare, and the difference is then in untested cases: under P1 the transfer to a side room delays testing, so slightly more patients are discharged or die in I before they are tested (at 100% sensitivity, `r n0(gval("cum_missed_untested_cases", P1, 1, 1) - gval("cum_missed_untested_cases", P2, 1, 1))` more than under P2).
+- **The kink in the difference plots.** The difference from P1 peaks at `r pc(miss_peak_sens)` sensitivity rather than at 0%. At 0% sensitivity nobody is confirmed under any policy, P2 and P3 are identical, and the difference (`r n0p(miss_gap$gap_P2[miss_gap$sens == 0])` under P2 and P3) comes only from their extra CDI cases. As sensitivity rises from 0%, the difference in positive results opens up: P1 confirms, treats and isolates cases sooner than P2 and P3, so the gap widens (`r n0p(miss_gap$gap_P2[abs(miss_gap$sens - miss_peak_sens) < 1e-6])` under P2), and P3 separates from P2 because its positive result rate is higher. Above this, all three policies confirm more cases, the pool of false negatives shrinks for everyone and the gap narrows. At 0% coverage nobody is tested, so the difference is zero.
+
+```{r}
+#| label: grid-plots-save
+
+# Plot files for each outcome: line plot, difference vs P1 (if P1 is in the grid), heatmap
+grid_plot_files <- grid_outcome_spec |>
+  mutate(lines   = file.path(output_dir, paste0("grid_lines_", variable, ".png")),
+         vs_ref  = if (reference_policy %in% isolation_policy) {
+           file.path(output_dir, paste0("grid_lines_vs_P1_", variable, ".png"))
+         } else NA_character_,
+         heatmap = file.path(output_dir, paste0("grid_heatmap_", variable, ".png")))
+
+# Save the grid plots to files
+for (i in seq_len(nrow(grid_plot_files))) {
+  v <- grid_plot_files$variable[i]
+  ggsave(grid_plot_files$lines[i], plot_grid_outcome_lines(grid_long, v),
+         width = 24, height = 10, dpi = 300, units = "cm")
+  if (!is.na(grid_plot_files$vs_ref[i])) {
+    ggsave(grid_plot_files$vs_ref[i], plot_grid_outcome_lines(grid_long, v, vs_ref = TRUE),
+           width = 18, height = 10, dpi = 300, units = "cm")
+  }
+  ggsave(grid_plot_files$heatmap[i], plot_grid_outcome_heatmap(grid_long, v),
+         width = 24, height = 11, dpi = 300, units = "cm")
+}
+
+grid_overview_file <- file.path(output_dir, "grid_lines_all_outcomes.png")
+ggsave(grid_overview_file, plot_grid_outcomes_overview(grid_long),
+       width = 24, height = 40, dpi = 300, units = "cm")
+```
+
+The tabs show the saved PNG files.
+
+::: panel-tabset
+```{r}
+#| label: grid-plots-tabs
+#| echo: false
+#| results: asis
+for (i in seq_len(nrow(grid_plot_files))) {
+  cat("\n\n### ", grid_plot_files$label[i], "\n\n", sep = "")
+  for (path in c(grid_plot_files$lines[i], grid_plot_files$vs_ref[i], grid_plot_files$heatmap[i])) {
+    if (!is.na(path)) cat("![](", path, "){width=100%}\n\n", sep = "")
+  }
+}
+```
+:::
+
+### All outcomes
+
+```{r}
+#| label: grid-plots-overview
+#| echo: false
+#| results: asis
+cat("![](", grid_overview_file, "){width=100%}\n", sep = "")
+```
+
+## 13) Outcomes avoided (or added) by increasing test sensitivity
+
+For each outcome in section 12, the change from increasing test sensitivity from `sens_from` to `sens_to` (set below; both must be values in the grid), under each isolation policy, at the same testing coverage:
+
+> avoided = cumulative total at `sens_from` − cumulative total at `sens_to` (all outcomes except side-room bed-days; a negative value is an increase)
+>
+> additional side-room patient bed-days = cumulative total at `sens_to` − cumulative total at `sens_from` (more cases are confirmed and isolated with the better test; a negative value is a decrease)
+
+How each outcome is reported is set in `sensitivity_gain_spec` in `Scripts/Model1_ODE_Functions.R`. Each tab shows a table for 0%, 20%, 40%, 60%, 80% and 100% testing coverage, and a chart for every testing coverage value in the grid (0% to 100%). At 0% coverage nobody is tested, so nothing changes. All values are saved as `sensitivity_gain_<from>_to_<to>.csv`.
+
+```{r}
+#| label: sensitivity-gain-save
+sens_from <- 0.5
+sens_to   <- 0.8
+
+sensitivity_gain <- make_sensitivity_gain(grid_long, sens_from, sens_to)
+write_csv(sensitivity_gain,
+          file.path(output_dir, sprintf("sensitivity_gain_%03d_to_%03d.csv",
+                                        round(100 * sens_from), round(100 * sens_to))))
+
+gain_plot_files <- grid_outcome_spec |>
+  mutate(path = file.path(output_dir, sprintf("sensitivity_gain_%03d_to_%03d_%s.png",
+                                              round(100 * sens_from), round(100 * sens_to), variable)))
+
+for (i in seq_len(nrow(gain_plot_files))) {
+  ggsave(gain_plot_files$path[i],
+         plot_sensitivity_gain(sensitivity_gain, gain_plot_files$variable[i], sens_from, sens_to),
+         width = 18, height = 12, dpi = 300, units = "cm")
+}
+```
+
+::: panel-tabset
+```{r}
+#| label: sensitivity-gain-tabs
+#| echo: false
+#| results: asis
+for (i in seq_len(nrow(gain_plot_files))) {
+  v <- gain_plot_files$variable[i]
+  cat("\n\n### ", gain_plot_files$label[i], "\n\n", sep = "")
+  cat(knitr::kable(make_sensitivity_gain_table(sensitivity_gain, v), format = "pipe", align = "r",
+                   caption = sensitivity_gain_title(v, sens_from, sens_to)),
+      sep = "\n")
+  cat("\n\n![](", gain_plot_files$path[i], "){width=80%}\n\n", sep = "")
+}
+```
+:::
+
+```{r}
+#| label: gain-note-values
+#| include: false
+# Figures for the note below, at 100% coverage: change from sens_from to sens_to (negative = fewer)
+chg  <- function(var, pol) gval(var, pol, 1, sens_to) - gval(var, pol, 1, sens_from)
+gain <- function(var, pol) {
+  sensitivity_gain$gain[sensitivity_gain$outcome == var & sensitivity_gain$isolation_policy == pol &
+                          abs(sensitivity_gain$prop_I_suspected - 1) < 1e-6]
+}
+pos_gain <- function(pol) pos_share(pol, sens_to) - pos_share(pol, sens_from)
+pp <- function(x) paste0("+", round(100 * x), " points")
+```
+
+**Note on the order of the isolation policies.** With the default parameters, improving test sensitivity avoids most hospital-acquired CDI cases and missed CDI cases under P2, then P3, then P1. Better sensitivity mostly helps by giving fewer false negative results: fewer patients cycle between awaiting a result (Xtest) and false negatives on the ward (FN), and more are confirmed and treated sooner. How much transmission this avoids depends on where each group of patients is cared for. The figures below are at 100% testing coverage, for an increase from `r pc(sens_from)` to `r pc(sens_to)` sensitivity.
+
+- **Hospital-acquired CDI cases avoided** (P1 `r n0(gain("cum_hospital_attributable_I", P1))`, P2 `r n0(gain("cum_hospital_attributable_I", P2))`, P3 `r n0(gain("cum_hospital_attributable_I", P3))`) follow the hospital-acquired colonisations avoided (P1 `r n0(gain("cum_colonised_in_hospital", P1))`, P2 `r n0(gain("cum_colonised_in_hospital", P2))`, P3 `r n0(gain("cum_colonised_in_hospital", P3))`).
+  - *P2* gains most. Suspected cases wait for their result on a general ward, so fewer retests mean fewer days in Xtest on the ward (colonisations from Xtest `r n0p(chg("cum_colonised_from_Xtest", P2))`) and as FN (`r n0p(chg("cum_colonised_from_FN", P2))`). The extra confirmed cases are isolated, so they add little transmission (colonisations from Xtreat `r n0p(chg("cum_colonised_from_Xtreat", P2))`). P2 also has the largest increase in the share of results that are positive (`r pc(pos_share(P2, sens_from))` to `r pc(pos_share(P2, sens_to))`, `r pp(pos_gain(P2))`), as the transfer time is added to its confirmed case rate.
+  - *P3* gains about as much as P2 from fewer days in Xtest (`r n0p(chg("cum_colonised_from_Xtest", P3))`) and as FN (`r n0p(chg("cum_colonised_from_FN", P3))`), but the extra confirmed cases are treated on a general ward and transmit at `betaXtreat`, adding `r n0(chg("cum_colonised_from_Xtreat", P3))` colonisations from Xtreat and offsetting much of the gain.
+  - *P1* gains least. Suspected cases are already isolated, so less time in Xtest saves little (`r n0p(chg("cum_colonised_from_Xtest", P1))`), and the gain comes only from fewer days as FN (`r n0p(chg("cum_colonised_from_FN", P1))`). P1 also starts from fewer cases (`r n0(gval("cum_hospital_attributable_I", P1, 1, sens_from))` hospital-acquired CDI cases at `r pc(sens_from)` sensitivity, against `r n0(gval("cum_hospital_attributable_I", P2, 1, sens_from))` under P2 and `r n0(gval("cum_hospital_attributable_I", P3, 1, sens_from))` under P3), and has the smallest increase in the share of positive results (`r pc(pos_share(P1, sens_from))` to `r pc(pos_share(P1, sens_to))`, `r pp(pos_gain(P1))`), as the transfer time is added to its false negative rate.
+- **Missed CDI cases avoided** (P1 `r n0(gain("cum_total_missed_cases", P1))`, P2 `r n0(gain("cum_total_missed_cases", P2))`, P3 `r n0(gain("cum_total_missed_cases", P3))`) are almost all false negatives discharged or dying in FN (P1 `r n0p(chg("cum_missed_false_negative_cases", P1))`, P2 `r n0p(chg("cum_missed_false_negative_cases", P2))`, P3 `r n0p(chg("cum_missed_false_negative_cases", P3))`). Missed untested cases (from I) barely change, as sensitivity does not affect who is tested. The order follows the number of false negatives at risk and how much the share of positive results increases: P2 has the most missed false negatives at `r pc(sens_from)` sensitivity (`r n0(gval("cum_missed_false_negative_cases", P2, 1, sens_from))`) and the largest increase in positive results; P3 is next (`r n0(gval("cum_missed_false_negative_cases", P3, 1, sens_from))`, `r pp(pos_gain(P3))`); P1 has the fewest (`r n0(gval("cum_missed_false_negative_cases", P1, 1, sens_from))`), as isolating suspected cases means fewer CDI cases and the transfer time slows the false negative rate.
+
+In short, improving sensitivity matters most where suspected cases wait on a general ward and confirmed cases are isolated (P2), less where confirmed cases stay on a general ward (P3), and least where suspected cases are already isolated (P1), which already prevents much of the transmission that better sensitivity would avoid. Part of the gap between P1 and P2 comes from the transfer time shifting the share of positive results in opposite directions.
 
 ## End of script
