@@ -98,6 +98,7 @@ run_with_overrides <- function(overrides = list(), scenario = scenarios$suspecte
   # Cumulative outcomes over the run (as compared across the scenario grid)
   cum_outcomes <- make_final_outcomes(list(oat_test = result)) |>
     bind_cols(calculate_total_patient_days(result)) |>
+    add_derived_outcomes() |>
     select(all_of(grid_outcome_spec$variable))
 
   tibble(

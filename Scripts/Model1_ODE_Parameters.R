@@ -304,8 +304,8 @@ fixed <- list(
   prob_mort_S = 0.001,
   
   # Daily mortality multipliers (relative to mortS)
-  mortI_mult = 2.0,
-  mortXtreat_mult = 1.2
+  mortI_mult = 3.0,
+  mortXtreat_mult = 1.5
 )
 
 # Validate fixed parameters once

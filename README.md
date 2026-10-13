@@ -87,8 +87,8 @@ Default parameter values are given in brackets; they are set in `Scripts/Model1_
 - Patients awaiting a test result (Xtest) stay in hospital until the result arrives; they can't be discharged from Xtest.
 - Death rates are constant:
   - S and C share a baseline rate (0.1% risk over a 7-day stay);
-  - I, Xtest and FN die at 2× the baseline;
-  - Xtreat dies at 1.2× the baseline.
+  - I, Xtest and FN die at 3× the baseline (`mortI_mult`);
+  - Xtreat dies at 1.5× the baseline (`mortXtreat_mult`).
 
 *Colonisation and progression*
 
@@ -187,10 +187,12 @@ Defines:
 - `make_annual_summary()`: annual totals of all flow quantities,
 - `make_final_outcomes()`: cumulative outcomes at end of run, including
   post-hoc attribution of hospital-acquired CDI and confirmed cases by
-  test type,
-- `make_research_outcomes_table()`: derives and formats all research
-  question outcomes (counts, proportions, differences) into a single
-  wide table,
+  test type, and CDI-attributable deaths,
+- `add_derived_outcomes()`: proportions confirmed, missed and confirmed
+  via retest, admission and discharge prevalence and their differences,
+  and specimens tested per confirmed case,
+- `make_research_outcomes_table()`: derives and formats the research
+  question outcomes (1a–4d) and ICER inputs into a single wide table,
 - `make_final_outcomes_vs_base()`: absolute differences vs a chosen base
   scenario,
 - `make_plot_long_states()`, `make_plot_long_bed_occupancy()`,
@@ -206,7 +208,7 @@ Defines:
   `plot_deaths_by_state_bar()`, `plot_deaths_by_state_area_noS()`,
   `plot_discharges_by_state_bar()`,
   `plot_discharges_by_state_area_noS()`, `plot_case_outcomes_bar()`,
-  `plot_scenario_params()`.
+  `plot_bed_days_bar()`, `plot_scenario_params()`.
 
 ### `Scripts/Model1_ODE_OAT_parameter_testing.R`
 
@@ -290,19 +292,20 @@ Main Quarto document. Runs the end-to-end workflow:
   time series for a few example scenarios,
 - negative-value and stabilisation checks for every scenario (Sections 7
   and 8),
-- time-series line and area plots for the example scenarios, up to
-  stabilisation (Section 9),
-- annual summary tables for the example scenarios (Section 10),
-- research question outcomes: the research outcomes table (annual totals,
-  including rates per 10,000 patient bed-days) for every scenario, and
-  differences between policies (P2 vs P1, P3 vs P1, P3 vs P2; Section 11),
-- stacked bar plots of annual summaries for the example scenarios
-  (Section 12),
-- outcomes by testing coverage and test sensitivity: plots comparing the
-  isolation policies across the grid, including rates and proportions
-  (Section 13),
-- change in outcomes due to increasing test sensitivity, e.g. from 50% to
-  80% (Section 14),
+- results for the example scenarios that help verify the model is
+  working as expected (Sections 9–11):
+  - time-series line and area plots, up to stabilisation (Section 9),
+  - annual summary tables (Section 10),
+  - stacked bar plots of annual summaries (Section 11),
+- results for the write-up (Sections 12–14):
+  - research question outcomes: the research outcomes table (annual
+    totals, including rates per 10,000 patient bed-days) for every
+    scenario, and differences between policies (P2 vs P1, P3 vs P1, P3 vs
+    P2; Section 12),
+  - outcomes by testing coverage and test sensitivity: plots comparing
+    the isolation policies across the grid (Section 13),
+  - change in outcomes due to increasing test sensitivity, e.g. from 50% to
+    80% (Section 14),
 - CSV and PNG export to `Outputs/<run_label>/`.
 
 Accepts a `run_label` parameter (see **Run instructions** below).
@@ -387,7 +390,7 @@ a labelled output folder.
   excluded from all cumulative totals, patient-days and annual summaries,
   so these cover the analysis period only. `add_quantities()` gives rows
   in the burn-in (including time 0) zero width and multiplies every other
-  output row by the time step. Sections 10–13 of the QMD report annual
+  output row by the time step. Sections 10–14 of the QMD report annual
   totals (the analysis-period total divided by its length in years), for
   comparison with surveillance data.
 - All model time intervals (e.g. `t_test_turnaround`, length-of-stay)
@@ -453,7 +456,7 @@ Scenario labels combine a policy code with the coverage and sensitivity
 as percentages, e.g. `P2_confirmed_cov050_sens100` (`P1_none`,
 `P2_confirmed`, `P3_susp_conf`). `example_settings` in Section 3 lists
 the coverage and sensitivity settings for the example scenarios, in the
-order shown in Sections 9 and 12 (by default 0%/0%, 50%/50%, 100% coverage/50%
+order shown in Sections 9 and 11 (by default 0%/0%, 50%/50%, 100% coverage/50%
 sensitivity, 50% coverage/100% sensitivity and 100%/100%), each run
 under all three policies (15 scenarios). They are used for time-series
 plots, annual summaries and the outcome tables. At 0% coverage nobody is
@@ -461,7 +464,7 @@ tested, so the three policies give the same results (a no-testing
 baseline).
 
 In Section 9, the time-series line and area plots show the policies as columns and
-the settings as rows; in Section 12, the stacked bar plots group the bars by setting, with P1,
+the settings as rows; in Section 11, the stacked bar plots group the bars by setting, with P1,
 P2 and P3 side by side and the setting label beneath each group.
 
 Grid results are cached in `Outputs/<run_label>/grid_runs.rds` and
@@ -492,22 +495,39 @@ on 15 cores). Set `grid_n_cores <- 1` to run scenarios one at a time.
   `"confirmed"`, and `Xtest + Xtreat` under `"suspected_and_confirmed"`.
 
 Section 13 of the QMD (outcomes by testing coverage and test sensitivity) compares the three isolation policies across
-testing coverage and test sensitivity, as annual totals. The outcomes
-are defined in `grid_outcome_spec` in `Scripts/Model1_ODE_Functions.R`
-(CDI cases, hospital-onset CDI cases, hospital-acquired CDI cases, missed
-CDI cases, deaths following CDI, hospital-acquired colonisations,
-discharged colonisations, patient bed-days, side-room patient bed-days
-and faecal specimens tested). Only the outcomes whose patterns differ are
-plotted (`plot = TRUE`): CDI cases, missed CDI cases, deaths following
-CDI, patient bed-days, side-room patient bed-days and faecal specimens
-tested. The others follow the same pattern as one of these, so they are
-only tabulated (research question outcomes table, Section 11 policy
-comparison tables, `grid_key_outcomes.csv`), as are the rates per 10,000
-patient bed-days, side-room and missed proportions and missed cases by
-origin (`rate_spec`; `grid_rates.csv`). Hospital-onset CDI is all
-in-hospital C→I progressions (patients admitted colonised plus patients
-colonised in hospital); hospital-acquired CDI is the part attributed to
-hospital-acquired colonisation. Each plotted outcome has its own tab with:
+testing coverage and test sensitivity. The outcomes are the research
+question outcomes defined in `grid_outcome_spec` in
+`Scripts/Model1_ODE_Functions.R` (numbered as in the research questions
+below):
+
+| Outcome | Variable | Format |
+|---|---|---|
+| 1a) Incident CDI cases | `cum_total_infected_incidence` | count per year |
+| 1b) Missed CDI cases | `cum_total_missed_cases` | count per year |
+| 1c) Proportion of CDI cases confirmed | `prop_confirmed` | proportion |
+| 1d) Proportion confirmed via retest (estimated) | `prop_confirmed_via_retest` | proportion |
+| 2a) Hospital-acquired CDI cases (estimated) | `cum_hospital_attributable_I` | count per year |
+| 2b) Discharge minus admission prevalence of colonisation | `diff_prev_C` | percentage points |
+| 2b) Discharge minus admission prevalence of CDI | `diff_prev_CDI` | percentage points |
+| 3a) Total patient bed-days | `hospital_bed_days` | count per year |
+| 3c) Side-room patient bed-days | `side_room_bed_days` | count per year |
+| 3e) Faecal specimens tested | `cum_total_test` | count per year |
+| 3f) Faecal specimens tested per confirmed case | `tests_per_confirmed` | rate |
+
+Counts are annual totals over the analysis period; proportions,
+prevalence differences and specimens per confirmed case are over the
+whole analysis period (derived in `add_derived_outcomes()`). Differences
+in total CDI cases (1a) are driven entirely by differences in
+hospital-acquired CDI cases (2a), so their difference plots are
+identical: with fixed admissions, patients admitted with CDI and
+progressions among patients admitted colonised are the same in every
+scenario (testing and isolation act only on infected patients). The
+rates per 10,000 patient bed-days, side-room and missed proportions and
+missed cases by origin are only tabulated (`rate_spec`;
+`grid_rates.csv`). Hospital-onset CDI is all in-hospital C→I
+progressions (patients admitted colonised plus patients colonised in
+hospital); hospital-acquired CDI is the part attributed to
+hospital-acquired colonisation. Each outcome has its own tab with:
 
 - a line plot of the outcome against test sensitivity, one line for each
   of 0%, 20%, 40%, 60%, 80% and 100% testing coverage
@@ -515,14 +535,18 @@ hospital-acquired colonisation. Each plotted outcome has its own tab with:
   legend, 0% yellow to 100% purple), faceted by policy with a shared y
   axis;
 - the same plot for the differences from P1 (P2 vs P1, P3 vs P1) at the
-  same coverage and sensitivity, placed under P2 and P3 (the first panel
-  is blank);
-- a heatmap of test sensitivity (x) by testing coverage (y), for every
-  grid value, faceted by policy with a shared colour scale (yellow lowest,
-  purple highest);
-- a heatmap of the differences between policies (P2 vs P1, P3 vs P1,
-  P3 vs P2; yellow largest negative difference, purple largest positive
-  difference).
+  same coverage and sensitivity, placed under P2 and P3 (the space under
+  P1 is left empty);
+- heatmaps of test sensitivity (x) by testing coverage (y), for every
+  grid value, in one figure: the outcome under each policy on the top row
+  (shared colour scale, yellow lowest, purple highest), and the
+  differences from P1 (P2 vs P1, P3 vs P1) on the bottom row under P2 and
+  P3, with the space under P1 left empty (yellow largest negative
+  difference, purple largest positive difference).
+
+The incremental effect of also isolating suspected cases (P3 vs P2) is
+saved in `grid_key_outcome_differences.csv`. Each panel has its own y axis so
+the rows line up.
 
 At very low test sensitivity (about 10% or below), testing can increase
 CDI, hospital-acquired CDI, missed cases and deaths compared with no
@@ -533,15 +557,23 @@ cycle between FN and Xtest, held back from treatment and isolation and
 kept infectious in hospital for longer. This is intended, to show the
 effect of a low-sensitivity assay.
 
-Section 14 of the QMD (change in outcomes due to increasing test sensitivity) shows, for each of the annual outcomes in `grid_outcome_spec`, the
-number avoided per year by increasing test sensitivity from `sens_from` (default
-50%) to `sens_to` (default 80%), by isolation policy and testing
-coverage: value at `sens_from` minus value at `sens_to`, so a negative
-value is an increase. Side-room bed-days are reported the other way
-round, as additional side-room patient bed-days (value at `sens_to`
-minus value at `sens_from`), since they rise as more cases are
-confirmed and isolated; this is set in `sensitivity_gain_spec` in
-`Scripts/Model1_ODE_Functions.R`. Each outcome has a tab
+Section 14 of the QMD (change in outcomes due to increasing test
+sensitivity) shows, for the same outcomes as Section 13 (`gain = TRUE`
+in `grid_outcome_spec`), the change from increasing test sensitivity
+from `sens_from` (default 50%) to `sens_to` (default 80%), by isolation
+policy (P1, P2 and P3 reported as sensitivities) and testing coverage.
+How each outcome is reported is set by `direction` in
+`sensitivity_gain_spec` in `Scripts/Model1_ODE_Functions.R`:
+
+- `"avoided"` (most counts, 2b and 3f): value at `sens_from` minus value
+  at `sens_to`, so a negative value is an increase;
+- `"additional"` (side-room bed-days): value at `sens_to` minus value at
+  `sens_from`, since they rise as more cases are confirmed and isolated;
+- `"change"` (the proportions 1c and 1d): value at `sens_to` minus value
+  at `sens_from`.
+
+Counts are per year; proportions and rates are over the analysis
+period. Each outcome has a tab
 with a table (0%, 20%, ..., 100% coverage) and a chart (every coverage
 value in the grid). Both values must be in the grid.
 
@@ -559,132 +591,197 @@ Implemented safeguards include:
 
 ------------------------------------------------------------------------
 
-## Outcomes of interest
+## Research questions
 
-All outcomes are derived from cumulative totals over the analysis period
-after the burn-in, via `make_research_outcomes_table()` in
-`Scripts/Model1_ODE_Functions.R`; the QMD divides counts and patient-days
-by the length of the analysis period to report them per year. The tables
-below set out how each outcome is calculated.
+The model is designed to focus on diagnostic testing of hospital
+patients with CDI. It does not include testing of symptomatic patients
+without CDI, or screening asymptomatic patients.
 
-The research outcomes table also includes:
+It can be used to quantify the effect of changes in testing algorithm
+sensitivity for different levels of testing coverage for symptomatic
+hospital patients with CDI and different hospital policies on location
+of suspected cases awaiting test results and/or confirmed cases while
+receiving treatment (i.e. on a general ward versus isolated in a
+side-room). The value of other parameters, such as test turnaround time
+and time required for patient transfers between general ward and side
+room beds can be varied for sensitivity analysis.
 
-- CDI cases admitted with CDI (`cum_admitted_infected`) and hospital-onset
-  (`cum_infected_in_hospital`, n and % of all CDI);
-- rates per 10,000 patient bed-days of CDI, hospital-onset CDI,
-  hospital-acquired CDI and faecal specimens tested (count /
-  `hospital_bed_days` × 10,000);
-- missed cases by origin (admitted with CDI, hospital-onset,
-  hospital-acquired). All cases enter the same I compartment and then
-  follow the same rates whatever their origin, so the model cannot track
-  the origin of each missed case: missed cases are apportioned by each
-  origin's share of CDI cases, and the proportion missed is the same for
-  every origin.
+Differences in total and hospital-onset CDI cases between scenarios are
+driven entirely by differences in hospital-acquired CDI because:
 
-### 1) Case ascertainment
+a)  the model uses fixed admission rates and fixed prevalence of
+    colonisations and infections among admitted patients, and
+b)  testing and isolation affect only infected patients, so progression
+    to CDI among patients admitted colonised is the same in every
+    scenario.
 
-|   | Outcome | Numerator | Denominator |
-|----|----|----|----|
-| 1a | Total incident CDI cases | `cum_total_infected_incidence` | — |
-| 1b | Confirmed | `cum_confirmed_cases` | `cum_total_infected_incidence` |
-| 1c | Missed | `cum_total_missed_cases` | `cum_total_infected_incidence` |
-| 1d | Confirmed via retest (delayed diagnosis)^i^ | `cum_confirmed_via_retest`\^ | `cum_total_infected_incidence` |
+Where outcomes are described as estimates, they are calculated using
+the shares of patient flows from one state to multiple states, or from
+multiple states to one state. For example:
 
-**Note**
+a)  cases confirmed through re-testing are estimated by apportioning the
+    flow from Xtest to Xtreat by the share of flows into Xtest that come
+    from FN (retests), rather than from I (first tests);
+b)  hospital-acquired CDI is estimated by apportioning the flow from C
+    to I by the share of all flows into C that come from S (colonisation
+    in hospital), rather than from admissions to C.
 
-The proportions for outcomes 1b and 1c do not sum to 1. The gap accounts
-for two categories of patient that are neither confirmed nor missed
-under the model definitions: (i) patients who die in the **Xtest** state
-— they were tested but died before their result was acted on, so are
-classified as neither confirmed nor missed; and (ii) patients still in
-hospital at the end of the model run whose CDI journey is unresolved.
+### Outcomes of interest
 
-^i^`cum_confirmed_via_retest` is estimated post-hoc by apportioning
+1)  Case ascertainment:
+    a)  the total number of incident CDI cases (to include patients that
+        were colonised on admission that progress to CDI during their
+        hospital stay, patients admitted with CDI and patients that
+        become colonised and progress to CDI during their hospital
+        stay);
+    b)  the number of missed CDI cases, i.e. those that are discharged
+        or die following progression to infection that either did not
+        have a specimen tested for CDI or received a false negative test
+        result;
+    c)  the number and proportion of incident CDI cases amongst hospital
+        patients that are confirmed through diagnostic testing;
+    d)  the estimated number and proportion of incident CDI cases that
+        are confirmed through re-testing following a false-negative test
+        result (delayed diagnosis).
+2)  Transmission of *C. difficile*:
+    a)  the estimated number of hospital-acquired infections (patients
+        that become colonised and progress to CDI during their hospital
+        stay); and
+    b)  the difference in prevalence of colonisation and infection
+        amongst discharged versus admitted patients.
+3)  Hospital resource use:
+    a)  total hospital bed occupancy, reflecting any impacts on bed
+        pressure and average patient length of stay;
+    b)  general ward bed occupancy;
+    c)  required side room bed occupancy;
+    d)  the proportion of hospital bed occupancy that is required for
+        patient isolation in a side room;
+    e)  the number of faecal specimens collected and tested for CDI;
+    f)  the number of faecal specimens collected and tested for CDI per
+        CDI case confirmed;
+    g)  the number of confirmed cases that are started on treatment for
+        CDI (equal to 1c).
+4)  CDI case outcomes:
+    a)  the number of incident CDI cases that are treated and recover
+        (then either returned to a general ward or discharged);
+    b)  the number of incident CDI cases that are discharged untreated;
+    c)  the number of incident CDI cases that die in hospital (with no
+        specimen sent for testing, awaiting a test result, awaiting
+        re-testing following a false negative test result, or during
+        treatment);
+    d)  number of CDI-attributable deaths in hospital (accounting for
+        deaths that may have occurred due to other causes).
+
+### Cost effectiveness analysis
+
+This involves calculation of Incremental Cost Effectiveness Ratios
+(ICERs) for specific changes in testing or isolation policy, that allows
+comparison of multiple outcomes within a single metric (£ cost per
+avoided QALY loss, or £ cost per avoided hospital-acquired CDI case). It
+would require information on the hospital resource costs (specimen
+collection and testing, side room and general ward patient care, CDI
+treatment) and patient welfare values for untreated, treated/recovered
+CDI cases and deaths from CDI (discounted QALY losses).
+
+The analysis would not take account of outcomes for CDI cases that occur
+in the community, as a result of:
+
+a)  discharged colonisations that progress to infection;
+b)  onwards transmission from discharged colonised or infected patients.
+
+Model outcomes required for calculation of an ICER for a change in
+testing or isolation are shown in the tables below.
+
+| Model outcome (ICER numerator, change in costs) | ICER numerator |
+|---|---|
+| Number of patient days on a general ward | × general ward care, cost per day |
+| Number of patient days in a side room | × side room care, cost per day |
+| Number of confirmed CDI cases | × CDI antimicrobial therapy, cost per course of treatment |
+| Number of faecal specimens tested for CDI | × specimen collection and testing, cost per specimen |
+
+| Model outcome (ICER denominator, avoided QALY loss or avoided hospital-acquired CDI case) | ICER denominator |
+|---|---|
+| Number of treated, recovered CDI cases | × QALY loss for treated cases |
+| Number of untreated, discharged cases | × QALY loss for untreated cases |
+| Number of CDI-attributable deaths | × discounted QALY loss for deaths |
+| Number of hospital-acquired CDI cases | |
+
+Extending the model to include probabilistic analysis, with
+distributions for uncertain parameters would allow value of information
+analysis.
+
+------------------------------------------------------------------------
+
+## Research question outcomes table (QMD Section 12)
+
+`make_research_outcomes_table()` in `Scripts/Model1_ODE_Functions.R`
+derives every outcome of interest from the cumulative totals over the
+analysis period after the burn-in (`make_final_outcomes()`), the
+patient-days (`calculate_total_patient_days()`) and the derived
+proportions (`add_derived_outcomes()`). With `per_year = TRUE` (as in the
+QMD) counts and patient-days are divided by the length of the analysis
+period. The table has one row per outcome, numbered as above, followed by
+the ICER numerator and denominator inputs, and one column per scenario.
+The QMD displays it for the example scenarios (`research_outcomes.csv`)
+and saves it for every scenario in the grid (`research_outcomes_all.csv`).
+
+| Outcome | Calculation |
+|----|----|
+| 1a) Incident CDI cases | `cum_total_infected_incidence` |
+| 1b) Missed CDI cases | `cum_total_missed_cases` |
+| 1c) CDI cases confirmed, n and % | `cum_confirmed_cases`; `prop_confirmed` = `cum_confirmed_cases / cum_total_infected_incidence` |
+| 1d) Confirmed via retest (estimated)^i^, n and % | `cum_confirmed_via_retest`; `prop_confirmed_via_retest` = `cum_confirmed_via_retest / cum_total_infected_incidence` |
+| 2a) Hospital-acquired CDI cases (estimated)^ii^ | `cum_hospital_attributable_I` |
+| 2b) Colonisation prevalence at admission and discharge, and difference (pp)^iii^ | `cum_admitted_colonised / cum_total_admissions`; `cum_discharges_colonised / cum_total_discharges`; `diff_prev_C` = discharge − admission |
+| 2b) CDI prevalence at admission and discharge, and difference (pp)^iii^ | `cum_admitted_infected / cum_total_admissions`; `cum_discharges_while_infected / cum_total_discharges`; `diff_prev_CDI` = discharge − admission |
+| 3a) Patient bed-days and average length of stay | `hospital_bed_days`; `hospital_bed_days / cum_total_admissions` |
+| 3b) General ward patient bed-days | `general_ward_bed_days` |
+| 3c) Side-room patient bed-days | `side_room_bed_days` |
+| 3d) Side-room patient bed-days, % of all | `side_room_bed_days / hospital_bed_days` |
+| 3e) Faecal specimens tested | `cum_total_test` |
+| 3f) Faecal specimens tested per confirmed case | `tests_per_confirmed` = `cum_total_test / cum_confirmed_cases` ("-" if none confirmed) |
+| 3g) Confirmed cases started on treatment | `cum_confirmed_cases` (equal to 1c) |
+| 4a) Treated and recovered | `cum_recovered_cases` |
+| 4b) Discharged untreated | `cum_discharges_while_infected` |
+| 4c) Died in hospital following CDI | `cum_deaths_post_infection` |
+| 4d) CDI-attributable deaths in hospital^iv^ | `cum_deaths_CDI_attributable` |
+
+ICER numerator (costs): general ward patient bed-days, side-room patient
+bed-days, confirmed CDI cases (treatment courses), faecal specimens
+tested. ICER denominator (outcomes): treated and recovered CDI cases,
+untreated discharged CDI cases, CDI-attributable deaths,
+hospital-acquired CDI cases (estimated).
+
+**Notes**
+
+The proportions confirmed (1c) and missed (1b) do not sum to 1: the gap
+is mainly deaths while awaiting a test result (in **Xtest**: tested, but
+neither confirmed nor missed).
+
+^i^ `cum_confirmed_via_retest` is estimated post-hoc by apportioning
 `cum_confirmed_cases` in proportion to the share of all tests that were
 retests (`cum_retest_false_negatives / cum_total_test`). This assumes
 the confirmation rate (`theta`) is equal for first tests and retests.
-
-### 2) Transmission
-
-|   | Outcome | Calculation |
-|----|----|----|
-| 2a | Hospital-acquired CDI, n and % of all CDI | `cum_hospital_attributable_I`^ii^ |
-| 2a(i) | - via patient-to-patient transmission and via background acquisition, n and % of all CDI | `cum_hospital_attributable_I_patient_to_patient`, `cum_hospital_attributable_I_background`^iii^ |
-| 2b | Hospital-acquired colonisations, n and % of all colonisations | `cum_colonised_in_hospital`; `prop_C_hospital_attributable` = `cum_colonised_in_hospital / cum_total_colonised_incidence` |
-| 2b(i) | - via patient-to-patient transmission and via background acquisition, n and % of all colonisations | `cum_colonised_patient_to_patient`, `cum_colonised_background` |
-| 2b(ii) | Patient-to-patient colonisations by source (C, I, Xtest, FN, Xtreat), n and % of patient-to-patient colonisations | `cum_colonised_from_C`, `_from_I`, `_from_Xtest`, `_from_FN`, `_from_Xtreat` |
-| 2c | Colonisation prevalence at admission, % | `cum_admitted_colonised / cum_total_admissions` |
-| 2d | Colonised patients discharged (n) and colonisation prevalence at discharge, % | `cum_discharges_colonised`; `cum_discharges_colonised / cum_total_discharges` |
-| 2e | CDI prevalence at admission, % | `cum_admitted_infected / cum_total_admissions` |
-| 2f | CDI patients discharged untreated (n) and CDI prevalence at discharge, % | `cum_discharges_while_infected`; `cum_discharges_while_infected / cum_total_discharges` |
-| 2g | Difference in CDI prevalence at discharge versus admission^i^, % | CDI prevalence at discharge - CDI prevalence at admission |
-
-**Note**
-
-^i^ A positive value indicates that the hospital is a net source of
-colonisation or infection.
 
 ^ii^ `cum_hospital_attributable_I` is estimated post-hoc by attributing
 `cum_infected_in_hospital` (C→I progressions within hospital) in
 proportion to the share of all colonisation that is hospital-acquired
 (`cum_colonised_in_hospital / cum_total_colonised_incidence`). See
-`make_final_outcomes()` in `Scripts/Model1_ODE_Functions.R`.
+`make_final_outcomes()`.
 
-^iii^ The ODE outputs in-hospital colonisation by source: background
-acquisition (`beta0 * S`) and contact with each patient group
-(`beta_k * k / N * S` for k = C, I, Xtest, FN, Xtreat). These sum to
-`colonised_in_hospital_rate`. Hospital-acquired CDI is split between
-background and patient-to-patient routes in proportion to their shares
-of cumulative in-hospital colonisations. For modelling simplicity the
-background acquisition rate does not depend on the number of patients
-in each state.
+^iii^ A positive difference indicates that the hospital is a net source
+of colonisation or infection.
 
-### 3) Hospital resource use
+^iv^ CDI-attributable deaths are deaths following CDI that would not
+have occurred at the baseline death rate (`mortS`): deaths of untreated
+CDI patients (I, Xtest, FN) × (1 − 1/`mortI_mult`) plus deaths of
+treated patients (Xtreat) × (1 − 1/`mortXtreat_mult`). In the grid run
+the multipliers are taken from each scenario's parameters
+(`mortI / mortS`, `mortXtreat / mortS`).
 
-|   | Outcome | Calculation |
-|----|----|----|
-| 3a | Total hospital bed-days | `hospital_bed_days` from `calculate_total_patient_days()` |
-| 3b | Average length of stay (days) | `hospital_bed_days / cum_total_admissions` |
-| 3c | Side-room bed-days | `side_room_bed_days` from `calculate_total_patient_days()` |
-| 3d | Side-room bed-days as % of total | `side_room_bed_days / hospital_bed_days` |
-| 3e | Side-room bed-days for suspected and confirmed cases (n and % of total) | `side_room_Xtest_bed_days`, `side_room_Xtreat_bed_days` (each counted only when that group is isolated under `isolation_policy`), divided by `hospital_bed_days` |
-| 3f | Faecal specimens collected and tested (n) | `cum_total_test` |
-
-### 4) Hospital patient mortality
-
-|   | Outcome | Numerator | Denominator |
-|----|----|----|----|
-| 4a | Total hospital deaths (n) | `cum_total_deaths` | — |
-| 4b | Deaths following CDI (n and %) | `cum_deaths_post_infection` | `cum_total_deaths` |
-| 4c | Deaths among missed CDI cases^i^ (n and %) | `cum_deaths_infected + cum_deaths_FN` | `cum_total_deaths` |
-
-**Note**
-
-^i^Deaths among missed CDI cases covers patients who died without ever
-receiving a CDI diagnosis: untested patients (died in **I**) and
-false-negative patients (died in **FN**). Deaths in the **Xtest** state
-are excluded as those patients had been tested, even though no diagnosis
-was confirmed.
-
-------------------------------------------------------------------------
-
-## Research question outcomes table (QMD Section 11)
-
-Derive and display all outcomes of interest, as defined in the model
-research questions. Proportions labelled `[1]` do not sum to 1 across
-case ascertainment categories: the gap reflects deaths in Xtest
-(patients tested but who died before their result was acted on) and
-cases still unresolved in hospital at the end of the model run.
-Differences labelled `[2]` are discharge minus admission prevalence in
-percentage points (pp); a positive value indicates the hospital is a net
-source. Missed cases by origin, labelled `[3]`, are apportioned by each
-origin's share of CDI cases (see above).
-
-The QMD displays this table, as annual totals, for the example scenarios
-and saves it for every scenario in the grid (`research_outcomes_all.csv`).
-It then shows, for each policy comparison (P2 vs P1, P3 vs P1, P3 vs
-P2), the difference per year in the Section 13 outcomes at the example
-settings.
+`make_final_outcomes()` also returns outcomes not in the table (e.g.
+in-hospital colonisations by route and source, deaths by state), which
+are saved in `final_outcomes_all.csv`.
 
 ------------------------------------------------------------------------
 
@@ -701,21 +798,17 @@ All scenarios in the grid:
 - `patient_days_summary.csv`
 - `all_negative_rows_combined.csv`
 - `stabilisation_summary_states_flows.csv`
-- `final_outcomes_all.csv` (control values, cumulative outcomes and
-  patient-days, one row per scenario)
-- `final_outcomes_P2_vs_P1.csv`, `final_outcomes_P3_vs_P1.csv`,
-  `final_outcomes_P3_vs_P2.csv` (differences in every final outcome
-  between policies at the same coverage and sensitivity, totals over the
-  analysis period)
+- `final_outcomes_all.csv` (control values, cumulative outcomes,
+  patient-days and derived proportions, one row per scenario)
 - `grid_key_outcomes.csv` and `grid_key_outcome_differences.csv` (the
-  Section 13 annual outcomes and their differences between policies, in
-  long format)
+  Section 13 and 14 outcomes, counts per year, and their differences
+  between policies including P3 vs P2, in long format)
 - `grid_rates.csv` (rates per 10,000 patient bed-days, side-room and
   missed proportions and missed cases per year by origin, long format)
 - `research_outcomes_all.csv` (per year)
-- `grid_lines_<outcome>.png`, `grid_lines_diff_<outcome>.png`,
-  `grid_heatmap_<outcome>.png`, `grid_heatmap_diff_<outcome>.png` (the
-  plotted Section 13 outcomes only)
+- `grid_lines_<outcome>.png`, `grid_lines_diff_<outcome>.png` and
+  `grid_heatmap_<outcome>.png` (heatmaps and difference heatmaps in one
+  figure; one set per Section 13 outcome)
 - `sensitivity_gain_<from>_to_<to>.csv` and
   `sensitivity_gain_<from>_to_<to>_<outcome>.png` (Section 14, e.g.
   `sensitivity_gain_050_to_080.csv`)
@@ -731,14 +824,16 @@ Example scenarios only:
   `plot_bed_occupancy.png` (area plot of general ward and side-room
   beds), `plot_flows_to_C_and_I.png`, `plot_case_ascertainment_line.png`,
   `plot_deaths_by_state_area_noS.png`, `plot_discharges_by_state_area_noS.png`
-- stacked bar plots of annual totals (Section 12):
+- stacked bar plots of annual totals (Section 11):
   `plot_colonisations_by_source.png` (background acquisition and
   patient-to-patient transmission from C, I, Xtest, FN and Xtreat),
   `plot_testing_bar.png` (first tests and retests),
   `plot_case_confirmation_bar.png` (confirmed via first test and retest),
   `plot_missed_cases_bar.png` (untested and false negatives) and
-  `plot_case_outcomes_bar.png` (discharged untreated, recovered after
-  treatment, died following CDI)
+  `plot_case_outcomes_bar.png` (discharged untreated: untested from I and
+  false negatives from FN; recovered after treatment; died following CDI)
+  and `plot_bed_days_bar.png` (patient bed-days per year in general ward
+  beds and in side rooms)
 
 The rendered HTML (`YYMMDD_Model1_ODE_Model_Run_<run_label>.html`) embeds
 these plots, so it can be moved or shared without the `Outputs/` folder.

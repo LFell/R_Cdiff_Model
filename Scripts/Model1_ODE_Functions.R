@@ -770,8 +770,17 @@ make_annual_summary <- function(df, scenario_label) {
 # Extracts final state values and all cumulative outcome columns from a named
 # list of post-processed scenario data frames (output of add_flow_quantities()).
 # Returns a one-row-per-scenario tibble.
+#
+# CDI-attributable deaths: deaths following CDI that would not have occurred at the baseline
+# (non-CDI) death rate. Untreated CDI patients (I, Xtest, FN) die at mortI_mult x the baseline and
+# treated patients (Xtreat) at mortXtreat_mult x the baseline, so the attributable share of deaths
+# in each state is 1 - 1 / multiplier. The multipliers default to the fixed parameters; pass the
+# scenario's own values if they have been overridden.
 
-make_final_outcomes <- function(scenario_post) {
+make_final_outcomes <- function(scenario_post,
+                                mortI_mult      = fixed$mortI_mult,
+                                mortXtreat_mult = fixed$mortXtreat_mult) {
+  attributable <- function(mult) if (is.finite(mult) && mult > 0) max(0, 1 - 1 / mult) else 0
   bind_rows(lapply(names(scenario_post), function(nm) {
     last <- scenario_post[[nm]] %>% filter(time == max(time)) %>% slice(1)
     
@@ -915,6 +924,10 @@ make_final_outcomes <- function(scenario_post) {
       cum_deaths_FN              = last$cum_deaths_FN,
       cum_deaths_confirmed_cases = last$cum_deaths_confirmed_cases,
       cum_deaths_post_infection  = last$cum_deaths_post_infection,
+      cum_deaths_CDI_attributable =
+        (last$cum_deaths_infected + last$cum_deaths_suspected_cases + last$cum_deaths_FN) *
+          attributable(mortI_mult) +
+        last$cum_deaths_confirmed_cases * attributable(mortXtreat_mult),
       cum_total_deaths           = last$cum_total_deaths,
       
       # Exits
@@ -925,141 +938,100 @@ make_final_outcomes <- function(scenario_post) {
 
 ## b) Research question outcomes table ####
 
-# Takes final_outcomes (from make_final_outcomes()) and patient_days_summary
-# (from calculate_total_patient_days()) and returns a single wide table of all
-# research question outcomes, one row per outcome and one column per scenario.
-#
-# Footnotes in the Outcome column:
-#   [1] prop_confirmed + prop_missed do not sum to 1; the gap reflects deaths
-#       in the Xtest state (tested but unconfirmed) and unresolved cases still
-#       in hospital at the end of the model run.
-#   [2] Discharge minus admission prevalence, in percentage points (pp).
-#       A positive value indicates the hospital is a net source.
-#   [3] Missed cases by origin are apportioned by each origin's share of CDI cases: all cases enter
-#       the same I compartment and follow the same rates, so the model cannot track the origin of
-#       each missed case, and the proportion missed is the same for every origin.
-#
-# per_year = TRUE labels counts "(n per year)": use it when the count and patient-day columns have
-# been divided by the length of the analysis period. Rates per 10,000 patient bed-days and
-# proportions are the same either way.
-
-make_research_outcomes_table <- function(final_outcomes, patient_days_summary, per_year = FALSE) {
-  
+# Adds derived outcomes (proportions, prevalence differences and specimens per confirmed case) to a
+# data frame of final outcomes joined to patient-days. Used by the research question outcomes table
+# and for the outcomes compared across the scenario grid.
+#   prop_confirmed            - confirmed / incident CDI cases (1c)
+#   prop_confirmed_via_retest - confirmed via retest (estimated) / incident CDI cases (1d)
+#   diff_prev_C, diff_prev_CDI - colonisation and CDI prevalence at discharge minus at admission (2b)
+#   tests_per_confirmed       - faecal specimens tested per confirmed case (3f; NA if none confirmed)
+add_derived_outcomes <- function(df) {
   safe_div <- function(num, den) ifelse(den > 0, num / den, NA_real_)
-  
-  fo <- final_outcomes |>
-    left_join(
-      patient_days_summary |> select(scenario, hospital_bed_days, side_room_bed_days,
-                                    side_room_Xtest_bed_days, side_room_Xtreat_bed_days),
-      by = "scenario"
-    ) |>
+  df |>
     mutate(
-      # Case ascertainment proportions
-      prop_confirmed            = safe_div(cum_confirmed_cases,        cum_total_infected_incidence),
-      prop_missed               = safe_div(cum_total_missed_cases,     cum_total_infected_incidence),
-      prop_confirmed_via_retest = safe_div(cum_confirmed_via_retest,   cum_total_infected_incidence),
-
-      # Origin of CDI cases: admitted with CDI or hospital-onset (all in-hospital C -> I)
-      prop_I_hospital_onset     = safe_div(cum_infected_in_hospital,   cum_total_infected_incidence),
-
-      # Rates per 10,000 patient bed-days
-      rate_cdi                  = 1e4 * safe_div(cum_total_infected_incidence, hospital_bed_days),
-      rate_ho                   = 1e4 * safe_div(cum_infected_in_hospital,     hospital_bed_days),
-      rate_ha                   = 1e4 * safe_div(cum_hospital_attributable_I,  hospital_bed_days),
-      rate_tests                = 1e4 * safe_div(cum_total_test,               hospital_bed_days),
-
-      # Missed cases by origin, apportioned by each origin's share of CDI cases [3]
-      missed_admitted           = cum_total_missed_cases * safe_div(cum_admitted_infected,       cum_total_infected_incidence),
-      missed_ho                 = cum_total_missed_cases * safe_div(cum_infected_in_hospital,    cum_total_infected_incidence),
-      missed_ha                 = cum_total_missed_cases * safe_div(cum_hospital_attributable_I, cum_total_infected_incidence),
-
-      # Discharge and admission prevalence
-      prop_admitted_C           = safe_div(cum_admitted_colonised,     cum_total_admissions),
-      prop_admitted_I           = safe_div(cum_admitted_infected,      cum_total_admissions),
-      prop_discharged_C         = safe_div(cum_discharges_colonised,   cum_total_discharges),
+      prop_confirmed            = safe_div(cum_confirmed_cases,           cum_total_infected_incidence),
+      prop_missed               = safe_div(cum_total_missed_cases,        cum_total_infected_incidence),
+      prop_confirmed_via_retest = safe_div(cum_confirmed_via_retest,      cum_total_infected_incidence),
+      prop_admitted_C           = safe_div(cum_admitted_colonised,        cum_total_admissions),
+      prop_admitted_I           = safe_div(cum_admitted_infected,         cum_total_admissions),
+      prop_discharged_C         = safe_div(cum_discharges_colonised,      cum_total_discharges),
       prop_discharged_CDI       = safe_div(cum_discharges_while_infected, cum_total_discharges),
       diff_prev_C               = prop_discharged_C   - prop_admitted_C,
       diff_prev_CDI             = prop_discharged_CDI - prop_admitted_I,
-      
-      # Resource use
-      avg_LOS                   = safe_div(hospital_bed_days,          cum_total_admissions),
-      prop_side_room_bed_days   = safe_div(side_room_bed_days,         hospital_bed_days),
-      prop_side_room_Xtest_bed_days  = safe_div(side_room_Xtest_bed_days,  hospital_bed_days),
-      prop_side_room_Xtreat_bed_days = safe_div(side_room_Xtreat_bed_days, hospital_bed_days),
-      
-      # Mortality
-      prop_deaths_post_infection = safe_div(cum_deaths_post_infection, cum_total_deaths),
-      cum_deaths_missed_cases    = cum_deaths_infected + cum_deaths_FN,
-      prop_deaths_missed_cases   = safe_div(cum_deaths_infected + cum_deaths_FN, cum_total_deaths)
+      tests_per_confirmed       = safe_div(cum_total_test,                cum_confirmed_cases)
     )
-  
+}
+
+# Takes final_outcomes (from make_final_outcomes()) and patient_days_summary (from
+# calculate_total_patient_days()) and returns a single wide table of the research question outcomes
+# (numbered as in the research questions, 1a-4d), followed by the inputs for incremental
+# cost-effectiveness ratios (ICERs), one row per outcome and one column per scenario.
+#
+# Proportions of incident CDI cases (1c, 1d) do not sum to 1 with missed cases (1b): the gap is
+# deaths while awaiting a test result (tested, but neither confirmed nor missed). Prevalence
+# differences (2b) are discharge minus admission prevalence, in percentage points; a positive value
+# means the hospital is a net source. Estimated outcomes (1d, 2a) are apportioned from shares of
+# patient flows (see make_final_outcomes()).
+#
+# per_year = TRUE labels counts "(n per year)": use it when the count and patient-day columns have
+# been divided by the length of the analysis period. Proportions are the same either way.
+
+make_research_outcomes_table <- function(final_outcomes, patient_days_summary, per_year = FALSE) {
+
+  safe_div <- function(num, den) ifelse(den > 0, num / den, NA_real_)
+
+  fo <- final_outcomes |>
+    left_join(
+      patient_days_summary |> select(scenario, hospital_bed_days, general_ward_bed_days,
+                                    side_room_bed_days),
+      by = "scenario"
+    ) |>
+    add_derived_outcomes() |>
+    mutate(
+      avg_LOS                 = safe_div(hospital_bed_days,  cum_total_admissions),
+      prop_side_room_bed_days = safe_div(side_room_bed_days, hospital_bed_days)
+    )
+
   outcomes_spec <- tribble(
-    ~group,                   ~label,                                                           ~variable,                     ~fmt,
-    
-    "Case ascertainment",     "(i) Total incident CDI cases (n)",                               "cum_total_infected_incidence", "n",
-    "Case ascertainment",     "(i) - admitted with CDI (n)",                                    "cum_admitted_infected",        "n",
-    "Case ascertainment",     "(i) - hospital-onset (n)",                                       "cum_infected_in_hospital",     "n",
-    "Case ascertainment",     "(i) - hospital-onset (% of all CDI)",                            "prop_I_hospital_onset",        "pct",
-    "Case ascertainment",     "(i) CDI cases per 10,000 patient bed-days",                      "rate_cdi",                     "dec",
-    "Case ascertainment",     "(i) Confirmed (n)",                                              "cum_confirmed_cases",          "n",
-    "Case ascertainment",     "(i) Confirmed (%) [1]",                                          "prop_confirmed",               "pct",
-    "Case ascertainment",     "(ii) Missed (n)",                                                "cum_total_missed_cases",       "n",
-    "Case ascertainment",     "(ii) Missed (%) [1]",                                            "prop_missed",                  "pct",
-    "Case ascertainment",     "(ii) - missed, admitted with CDI (n) [3]",                      "missed_admitted",              "n",
-    "Case ascertainment",     "(ii) - missed, hospital-onset (n) [3]",                         "missed_ho",                    "n",
-    "Case ascertainment",     "(ii) - missed, hospital-acquired (n) [3]",                      "missed_ha",                    "n",
-    "Case ascertainment",     "(iii) Confirmed via retest (n)",                                 "cum_confirmed_via_retest",     "n",
-    "Case ascertainment",     "(iii) Confirmed via retest (%) [1]",                             "prop_confirmed_via_retest",    "pct",
-    
-    "Transmission",           "(i) Hospital-acquired CDI (n)",                                  "cum_hospital_attributable_I",  "n",
-    "Transmission",           "(i) Hospital-acquired CDI (% of all CDI)",                       "prop_I_hospital_attributable", "pct",
-    "Transmission",           "(i) Hospital-onset CDI per 10,000 patient bed-days",             "rate_ho",                      "dec",
-    "Transmission",           "(i) Hospital-acquired CDI per 10,000 patient bed-days",          "rate_ha",                      "dec",
-    "Transmission",           "(i) - via patient-to-patient transmission (n)",                 "cum_hospital_attributable_I_patient_to_patient", "n",
-    "Transmission",           "(i) - via patient-to-patient transmission (% of all CDI)",      "prop_I_hospital_attributable_patient_to_patient", "pct",
-    "Transmission",           "(i) - via background acquisition (n)",                          "cum_hospital_attributable_I_background", "n",
-    "Transmission",           "(i) - via background acquisition (% of all CDI)",               "prop_I_hospital_attributable_background", "pct",
-    "Transmission",           "(ii) Hospital-acquired colonisations (n)",                       "cum_colonised_in_hospital",    "n",
-    "Transmission",           "(ii) Hospital-acquired colonisations (% of all colonisations)",  "prop_C_hospital_attributable", "pct",
-    "Transmission",           "(ii) - via patient-to-patient transmission (n)",                "cum_colonised_patient_to_patient", "n",
-    "Transmission",           "(ii) - via patient-to-patient transmission (% of all colonisations)", "prop_C_patient_to_patient", "pct",
-    "Transmission",           "(ii) - via background acquisition (n)",                         "cum_colonised_background",     "n",
-    "Transmission",           "(ii) - via background acquisition (% of all colonisations)",    "prop_C_background",            "pct",
-    "Transmission",           "(ii) Patient-to-patient colonisations from C (n)",              "cum_colonised_from_C",         "n",
-    "Transmission",           "(ii) Patient-to-patient colonisations from C (%)",              "prop_p2p_from_C",              "pct",
-    "Transmission",           "(ii) Patient-to-patient colonisations from I (n)",              "cum_colonised_from_I",         "n",
-    "Transmission",           "(ii) Patient-to-patient colonisations from I (%)",              "prop_p2p_from_I",              "pct",
-    "Transmission",           "(ii) Patient-to-patient colonisations from Xtest (n)",          "cum_colonised_from_Xtest",     "n",
-    "Transmission",           "(ii) Patient-to-patient colonisations from Xtest (%)",          "prop_p2p_from_Xtest",          "pct",
-    "Transmission",           "(ii) Patient-to-patient colonisations from FN (n)",             "cum_colonised_from_FN",        "n",
-    "Transmission",           "(ii) Patient-to-patient colonisations from FN (%)",             "prop_p2p_from_FN",             "pct",
-    "Transmission",           "(ii) Patient-to-patient colonisations from Xtreat (n)",         "cum_colonised_from_Xtreat",    "n",
-    "Transmission",           "(ii) Patient-to-patient colonisations from Xtreat (%)",         "prop_p2p_from_Xtreat",         "pct",
-    "Transmission",           "(ii) Colonisation prevalence at admission (%)",                 "prop_admitted_C",              "pct",
-    "Transmission",           "(iii) Colonised patients discharged (n)",                        "cum_discharges_colonised",     "n",
-    "Transmission",           "(iii) Colonisation prevalence at discharge (%)",                 "prop_discharged_C",            "pct",
-    "Transmission",           "(iii) Difference in colonisation prevalence (pp) [2]",           "diff_prev_C",                  "pp",
-    "Transmission",           "(iii) CDI prevalence at admission (%)",                          "prop_admitted_I",              "pct",
-    "Transmission",           "(iii) CDI patients discharged untreated (n)",                    "cum_discharges_while_infected", "n",
-    "Transmission",           "(iii) CDI prevalence at discharge (%)",                          "prop_discharged_CDI",          "pct",
-    "Transmission",           "(iii) Difference in CDI prevalence (pp) [2]",                   "diff_prev_CDI",                "pp",
-    
-    "Hospital resource use",  "(i) Total hospital bed-days (n)",                                "hospital_bed_days",            "n",
-    "Hospital resource use",  "(ii) Average length of stay (days)",                              "avg_LOS",                      "dec",
-    "Hospital resource use",  "(ii) Side-room bed-days (n)",                                    "side_room_bed_days",           "n",
-    "Hospital resource use",  "(ii) Side-room bed-days (% of total)",                           "prop_side_room_bed_days",      "pct",
-    "Hospital resource use",  "(ii) Side-room bed-days: suspected cases (n)",                   "side_room_Xtest_bed_days",     "n",
-    "Hospital resource use",  "(ii) Side-room bed-days: suspected cases (% of total)",          "prop_side_room_Xtest_bed_days", "pct",
-    "Hospital resource use",  "(ii) Side-room bed-days: confirmed cases (n)",                   "side_room_Xtreat_bed_days",    "n",
-    "Hospital resource use",  "(ii) Side-room bed-days: confirmed cases (% of total)",          "prop_side_room_Xtreat_bed_days", "pct",
-    "Hospital resource use",  "(iii) Faecal specimens tested (n)",                              "cum_total_test",               "n",
-    "Hospital resource use",  "(iii) Faecal specimens tested per 10,000 patient bed-days",      "rate_tests",                   "dec",
-    
-    "Mortality",              "(i) Total hospital deaths (n)",                                  "cum_total_deaths",             "n",
-    "Mortality",              "(ii) Deaths following CDI (n)",                                  "cum_deaths_post_infection",    "n",
-    "Mortality",              "(ii) Deaths following CDI (% of all deaths)",                    "prop_deaths_post_infection",   "pct",
-    "Mortality",              "(iii) Deaths among missed CDI cases (n)",                        "cum_deaths_missed_cases",      "n",
-    "Mortality",              "(iii) Deaths among missed CDI cases (% of all deaths)",          "prop_deaths_missed_cases",     "pct"
+    ~group,                        ~label,                                                                    ~variable,                       ~fmt,
+
+    "1) Case ascertainment",       "1a) Incident CDI cases (n)",                                              "cum_total_infected_incidence",  "n",
+    "1) Case ascertainment",       "1b) Missed CDI cases (n)",                                                "cum_total_missed_cases",        "n",
+    "1) Case ascertainment",       "1c) CDI cases confirmed (n)",                                             "cum_confirmed_cases",           "n",
+    "1) Case ascertainment",       "1c) CDI cases confirmed (% of incident CDI cases)",                       "prop_confirmed",                "pct",
+    "1) Case ascertainment",       "1d) CDI cases confirmed via retest, estimated (n)",                       "cum_confirmed_via_retest",      "n",
+    "1) Case ascertainment",       "1d) CDI cases confirmed via retest, estimated (% of incident CDI cases)", "prop_confirmed_via_retest",     "pct",
+
+    "2) Transmission",             "2a) Hospital-acquired CDI cases, estimated (n)",                          "cum_hospital_attributable_I",   "n",
+    "2) Transmission",             "2b) Colonisation prevalence at admission (%)",                            "prop_admitted_C",               "pct",
+    "2) Transmission",             "2b) Colonisation prevalence at discharge (%)",                            "prop_discharged_C",             "pct",
+    "2) Transmission",             "2b) Difference in colonisation prevalence, discharge vs admission (pp)", "diff_prev_C",                   "pp",
+    "2) Transmission",             "2b) CDI prevalence at admission (%)",                                     "prop_admitted_I",               "pct",
+    "2) Transmission",             "2b) CDI prevalence at discharge (%)",                                     "prop_discharged_CDI",           "pct",
+    "2) Transmission",             "2b) Difference in CDI prevalence, discharge vs admission (pp)",           "diff_prev_CDI",                 "pp",
+
+    "3) Hospital resource use",    "3a) Patient bed-days (n)",                                                "hospital_bed_days",             "n",
+    "3) Hospital resource use",    "3a) Average length of stay (days)",                                       "avg_LOS",                       "dec",
+    "3) Hospital resource use",    "3b) General ward patient bed-days (n)",                                   "general_ward_bed_days",         "n",
+    "3) Hospital resource use",    "3c) Side-room patient bed-days (n)",                                      "side_room_bed_days",            "n",
+    "3) Hospital resource use",    "3d) Side-room patient bed-days (% of all patient bed-days)",              "prop_side_room_bed_days",       "pct",
+    "3) Hospital resource use",    "3e) Faecal specimens tested (n)",                                         "cum_total_test",                "n",
+    "3) Hospital resource use",    "3f) Faecal specimens tested per confirmed CDI case",                      "tests_per_confirmed",           "dec",
+    "3) Hospital resource use",    "3g) Confirmed CDI cases started on treatment (n)",                        "cum_confirmed_cases",           "n",
+
+    "4) CDI case outcomes",        "4a) Treated and recovered (n)",                                           "cum_recovered_cases",           "n",
+    "4) CDI case outcomes",        "4b) Discharged untreated (n)",                                            "cum_discharges_while_infected", "n",
+    "4) CDI case outcomes",        "4c) Died in hospital following CDI (n)",                                  "cum_deaths_post_infection",     "n",
+    "4) CDI case outcomes",        "4d) CDI-attributable deaths in hospital (n)",                             "cum_deaths_CDI_attributable",   "n",
+
+    "ICER numerator (costs)",      "General ward patient bed-days (n)",                                       "general_ward_bed_days",         "n",
+    "ICER numerator (costs)",      "Side-room patient bed-days (n)",                                          "side_room_bed_days",            "n",
+    "ICER numerator (costs)",      "Confirmed CDI cases: treatment courses (n)",                              "cum_confirmed_cases",           "n",
+    "ICER numerator (costs)",      "Faecal specimens tested (n)",                                             "cum_total_test",                "n",
+    "ICER denominator (outcomes)", "Treated and recovered CDI cases (n)",                                     "cum_recovered_cases",           "n",
+    "ICER denominator (outcomes)", "Untreated discharged CDI cases (n)",                                      "cum_discharges_while_infected", "n",
+    "ICER denominator (outcomes)", "CDI-attributable deaths (n)",                                             "cum_deaths_CDI_attributable",   "n",
+    "ICER denominator (outcomes)", "Hospital-acquired CDI cases, estimated (n)",                              "cum_hospital_attributable_I",   "n"
   )
   if (per_year) {
     outcomes_spec <- outcomes_spec |> mutate(label = sub("(n)", "(n per year)", label, fixed = TRUE))
@@ -1067,6 +1039,7 @@ make_research_outcomes_table <- function(final_outcomes, patient_days_summary, p
 
   fmt_val <- function(x, fmt) {
     dplyr::case_when(
+      is.na(x)     ~ "-",
       fmt == "pct" ~ scales::percent(x, accuracy = 0.1),
       fmt == "pp"  ~ paste0(sprintf("%+.1f", x * 100), " pp"),
       fmt == "n"   ~ scales::comma(round(x)),
@@ -1074,16 +1047,18 @@ make_research_outcomes_table <- function(final_outcomes, patient_days_summary, p
       TRUE         ~ as.character(round(x, 3))
     )
   }
-  
+
   scenario_cols <- fo |>
-    select(scenario, all_of(outcomes_spec$variable)) |>
+    select(scenario, all_of(unique(outcomes_spec$variable))) |>
     pivot_longer(-scenario, names_to = "variable", values_to = "value")
-  
+
   outcomes_spec |>
-    left_join(scenario_cols, by = "variable") |>
+    mutate(row = row_number()) |>
+    left_join(scenario_cols, by = "variable", relationship = "many-to-many") |>
     mutate(value_fmt = fmt_val(value, fmt)) |>
-    select(group, label, scenario, value_fmt) |>
+    select(row, group, label, scenario, value_fmt) |>
     pivot_wider(names_from = scenario, values_from = value_fmt) |>
+    select(-row) |>
     rename("Research question" = group, "Outcome" = label)
 }
 
@@ -1739,16 +1714,33 @@ plot_discharges_by_state_area_noS <- function(plot_long_flows,
 
 ## s) Outcomes of CDI cases per year - stacked bar plot ####
 
-# Exits of CDI patients: discharged untreated (from I and FN), recovered after treatment (returned to
-# a general ward or discharged from Xtreat) and deaths following CDI (from I, Xtest, FN and Xtreat).
-plot_case_outcomes_bar <- function(final_outcomes) {
+# Exits of CDI patients: discharged untreated, split into untested (from I) and after a false negative
+# result (from FN), recovered after treatment (returned to a general ward or discharged from Xtreat)
+# and deaths following CDI (from I, Xtest, FN and Xtreat).
+plot_case_outcomes_bar <- function(final_outcomes, colour_palette = model_colour_palette) {
   plot_example_stacked(final_outcomes,
-                       components = c("Discharged untreated (from I and FN)" = "cum_discharges_while_infected",
-                                      "Recovered after treatment"             = "cum_recovered_cases",
-                                      "Died following CDI"                    = "cum_deaths_post_infection"),
+                       components = c("Discharged untreated: untested (from I)"       = "cum_discharges_infected",
+                                      "Discharged untreated: false negative (from FN)" = "cum_discharges_FN",
+                                      "Recovered after treatment"                      = "cum_recovered_cases",
+                                      "Died following CDI"                             = "cum_deaths_post_infection"),
                        title   = "Outcomes of CDI cases per year",
                        y_label = "CDI cases per year",
-                       colours = c("#8DA0CBFF", "#FFD92FFF", "#B3B3B3FF"))
+                       colours = c(unname(colour_palette[c("I", "FN", "Xtreat")]), "#B3B3B3FF"))
+}
+
+## t2) Patient bed-days per year by bed type - stacked bar plot ####
+
+# General ward and side-room bed-days (suspected and confirmed cases combined: Xtest is isolated
+# under P3 only, Xtreat under P2 and P3). The stack is total patient bed-days. Takes patient-days
+# (from calculate_total_patient_days()), divided by the number of years.
+plot_bed_days_bar <- function(patient_days_summary, colour_palette = model_colour_palette) {
+  plot_example_stacked(patient_days_summary,
+                       components = c("General ward" = "general_ward_bed_days",
+                                      "Side room"    = "side_room_bed_days"),
+                       title   = "Patient bed-days per year by bed type",
+                       y_label = "Patient bed-days per year",
+                       colours = unname(colour_palette[c("general_ward_bed_occupancy",
+                                                         "side_room_bed_occupancy")]))
 }
 
 ## u) Hospital-acquired colonisations by source per year - stacked bar plot ####
@@ -1780,7 +1772,7 @@ plot_scenario_params <- function(control_parms) {
     ggplot(aes(test_sens, prop_I_suspected)) +
     geom_point() +
     geom_text(aes(label = scenario), vjust = -0.7, size = font_base_size / .pt) +
-    facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels)) +
+    facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels), axes = "all_y") +
     theme_classic(base_size = font_base_size) +
     my_theme +
     scale_x_continuous(limits = c(0, 1.1), labels = scales::percent) +
@@ -1882,7 +1874,9 @@ run_scenario_grid <- function(grid, time_step, burn_in = 0, n_cores = 1) {
     post <- run_scenario(parms) |> add_quantities(time_step = time_step, burn_in = burn_in)
     list(
       parms        = as_tibble(parms),
-      final        = make_final_outcomes(set_names(list(post), scenario)),
+      final        = make_final_outcomes(set_names(list(post), scenario),
+                                         mortI_mult      = if (parms$mortS > 0) parms$mortI / parms$mortS else 1,
+                                         mortXtreat_mult = if (parms$mortS > 0) parms$mortXtreat / parms$mortS else 1),
       patient_days = calculate_total_patient_days(post) |> mutate(scenario = scenario, .before = 1),
       stability    = suppressMessages(stabilisation_summary(post, scenario)),
       negatives    = suppressMessages(negative_value_rows(post)) |>
@@ -1915,50 +1909,67 @@ run_scenario_grid <- function(grid, time_step, burn_in = 0, n_cores = 1) {
 
 ## d) Combine grid inputs and cumulative outcomes ####
 
-# One row per scenario: control values, then final cumulative outcomes and patient-days.
+# One row per scenario: control values, final cumulative outcomes, patient-days and the derived
+# outcomes from add_derived_outcomes() (proportions, prevalence differences, specimens per
+# confirmed case).
 make_grid_results <- function(grid, grid_runs) {
   grid |>
     left_join(grid_runs$final,        by = "scenario") |>
-    left_join(grid_runs$patient_days, by = "scenario")
+    left_join(grid_runs$patient_days, by = "scenario") |>
+    add_derived_outcomes()
 }
 
 ## e) Outcomes compared across the grid ####
 
-# Shown as annual totals (mean per year of the analysis period after the burn-in). Definitions:
+# The research question outcomes compared across testing coverage and test sensitivity (sections 13
+# and 14 of the QMD), numbered as in the research questions. Counts (fmt "n") are shown as annual
+# totals (mean per year of the analysis period after the burn-in). Definitions:
 #   - CDI cases: all incident cases, admitted with CDI plus hospital-onset.
-#   - Hospital-onset CDI: all in-hospital progressions from C to I (patients admitted colonised plus
-#     patients colonised in hospital).
-#   - Hospital-acquired CDI: the post-hoc attribution in make_final_outcomes() (in-hospital
-#     progressions x share of colonisations acquired in hospital), a subset of hospital-onset CDI.
-#   - Missed CDI cases are exits from I and FN by discharge or death (never diagnosed).
-# fmt sets how values are labelled: "n" (counts), "rate" (one decimal place) or "pct" (percent).
+#   - Missed CDI cases: exits from I and FN by discharge or death (never diagnosed).
+#   - Confirmed via retest and hospital-acquired CDI are estimated from shares of patient flows (see
+#     make_final_outcomes()).
+#   - Differences in total CDI cases between scenarios equal the differences in hospital-acquired
+#     CDI: with fixed admissions, admitted CDI and progressions from colonisation on admission are
+#     the same in every scenario.
+# fmt sets how values are labelled: "n" (counts), "rate" (one decimal place), "pct" (percent) or
+# "pp" (percentage points).
 # plot = TRUE: plotted in the QMD's tabs of outcomes by testing coverage and test sensitivity.
-# Outcomes with plot = FALSE follow the same pattern as a plotted one (e.g. hospital-onset and
-# hospital-acquired CDI follow all CDI cases), so they are only tabulated.
+# gain = TRUE: reported in the QMD's change in outcomes due to increasing test sensitivity.
 grid_outcome_spec <- tribble(
-  ~variable,                       ~label,                               ~fmt, ~plot,
-  "cum_total_infected_incidence",  "CDI cases",                          "n",  TRUE,
-  "cum_infected_in_hospital",      "Hospital-onset CDI cases",           "n",  FALSE,
-  "cum_hospital_attributable_I",   "Hospital-acquired CDI cases",        "n",  FALSE,
-  "cum_total_missed_cases",        "Missed CDI cases",                   "n",  TRUE,
-  "cum_deaths_post_infection",     "Deaths following CDI",               "n",  TRUE,
-  "cum_colonised_in_hospital",     "Hospital-acquired colonisations",    "n",  FALSE,
-  "cum_discharges_colonised",      "Discharged colonisations",           "n",  FALSE,
-  "hospital_bed_days",             "Patient bed-days",                   "n",  TRUE,
-  "side_room_bed_days",            "Side-room patient bed-days",         "n",  TRUE,
-  "cum_total_test",                "Faecal specimens tested",            "n",  TRUE
+  ~variable,                       ~label,                                                                  ~fmt,   ~plot, ~gain,
+  "cum_total_infected_incidence",  "1a) Incident CDI cases",                                                "n",    TRUE,  TRUE,
+  "cum_total_missed_cases",        "1b) Missed CDI cases",                                                  "n",    TRUE,  TRUE,
+  "prop_confirmed",                "1c) Proportion of CDI cases confirmed",                                 "pct",  TRUE,  TRUE,
+  "prop_confirmed_via_retest",     "1d) Proportion of CDI cases confirmed via retest (estimated)",          "pct",  TRUE,  TRUE,
+  "cum_hospital_attributable_I",   "2a) Hospital-acquired CDI cases (estimated)",                           "n",    TRUE,  TRUE,
+  "diff_prev_C",                   "2b) Difference in colonisation prevalence, discharge vs admission",     "pp",   TRUE,  TRUE,
+  "diff_prev_CDI",                 "2b) Difference in CDI prevalence, discharge vs admission",              "pp",   TRUE,  TRUE,
+  "hospital_bed_days",             "3a) Patient bed-days",                                                  "n",    TRUE,  TRUE,
+  "side_room_bed_days",            "3c) Side-room patient bed-days",                                        "n",    TRUE,  TRUE,
+  "cum_total_test",                "3e) Faecal specimens tested",                                           "n",    TRUE,  TRUE,
+  "tests_per_confirmed",           "3f) Faecal specimens tested per confirmed CDI case",                    "rate", TRUE,  TRUE
 )
+
+# y-axis label for each value format
+fmt_axis_label <- function(fmt) {
+  switch(fmt,
+    n    = "Per year",
+    pct  = "Proportion",
+    pp   = "Percentage points",
+    rate = "Per confirmed case",
+    "Value")
+}
 
 ## f) Long-format grid outcomes and policy differences ####
 
-# One row per scenario and outcome. value is divided by `years` (the length of the analysis period)
-# to give annual totals; use years = 1 for outcomes that are already rates or proportions.
+# One row per scenario and outcome. Counts (fmt "n" in spec) are divided by `years` (the length of
+# the analysis period) to give annual totals; proportions and ratios are unchanged.
 make_grid_outcomes_long <- function(grid_results, spec = grid_outcome_spec, years = 1) {
   grid_results |>
     select(scenario, isolation_policy, prop_I_suspected, test_sens, all_of(spec$variable)) |>
     pivot_longer(all_of(spec$variable), names_to = "outcome", values_to = "value") |>
     mutate(
-      value            = value / years,
+      value            = if_else(spec$fmt[match(outcome, spec$variable)] == "n", value / years, value),
       outcome          = factor(outcome, levels = spec$variable),
       isolation_policy = factor(isolation_policy, levels = isolation_policy_levels)
     )
@@ -2020,11 +2031,12 @@ coverage_factor <- function(x) {
 }
 
 # Axis and legend label functions by value format; diff = TRUE for differences between policies
-# (percentages are then differences in percentage points)
+# or test sensitivities (percentages are then differences in percentage points)
 fmt_labels <- function(fmt, diff = FALSE) {
   switch(fmt,
     pct  = if (diff) scales::label_number(scale = 100, accuracy = 0.1, suffix = " pp", style_positive = "plus")
            else scales::label_percent(accuracy = 1),
+    pp   = scales::label_number(scale = 100, accuracy = 0.1, suffix = " pp", style_positive = "plus"),
     rate = scales::label_number(accuracy = 0.1, big.mark = ",", style_positive = if (diff) "plus" else "none"),
     scales::label_comma(style_positive = if (diff) "plus" else "none"))
 }
@@ -2037,7 +2049,7 @@ plot_grid_outcome_lines <- function(grid_long,
                                     outcome_var,
                                     coverage = grid_line_coverage,
                                     spec     = grid_outcome_spec,
-                                    y_label  = "Per year") {
+                                    y_label  = NULL) {
   s <- spec_row(spec, outcome_var)
   grid_long |>
     filter(outcome == outcome_var) |>
@@ -2046,26 +2058,39 @@ plot_grid_outcome_lines <- function(grid_long,
     ggplot(aes(test_sens, value, colour = coverage, group = coverage)) +
     geom_line(linewidth = 0.6) +
     geom_point(size = 0.7) +
-    facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels)) +
+    facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels), axes = "all_y") +
     grid_coverage_colour +
     scale_x_continuous("Test sensitivity", labels = scales::percent) +
-    scale_y_continuous(y_label, labels = fmt_labels(s$fmt)) +
+    scale_y_continuous(y_label %||% fmt_axis_label(s$fmt), labels = fmt_labels(s$fmt)) +
     labs(title = s$label) +
     grid_theme
 }
 
 ### ii) Line plot of differences between policies ####
 
+# Comparisons with the reference policy (P2 vs P1, P3 vs P1)
+ref_comparisons <- function() policy_comparisons$label[policy_comparisons$comparator == reference_policy]
+
+# Removes everything drawn for the first facet panel (panel, strip and axes) from a facet_wrap plot
+# with one row, leaving empty space, so the remaining panels sit under P2 and P3 in a plot of the
+# three policies. Returns a gtable (can be saved with ggsave() or combined with cowplot).
+blank_first_panel <- function(p) {
+  g <- ggplotGrob(p)
+  first <- grepl("^(panel|strip-t|axis-l|axis-b|axis-t|axis-r)-1-1$", g$layout$name)
+  g$grobs[first] <- rep(list(zeroGrob()), sum(first))
+  g
+}
+
 # One panel per comparison with the reference policy (P2 vs P1, P3 vs P1), placed under P2 and P3 in
-# the line plot of totals: the first panel (where P1 vs P1 would be) is left blank. Negative = less
-# of the outcome than under P1.
+# the line plot of totals: the first panel (where P1 vs P1 would be) is left empty. Each panel has
+# its own y axis. Negative = less of the outcome than under P1. Returns a gtable.
 plot_grid_diff_lines <- function(grid_diffs,
                                  outcome_var,
                                  coverage    = grid_line_coverage,
                                  spec        = grid_outcome_spec,
-                                 comparisons = policy_comparisons$label[policy_comparisons$comparator == reference_policy]) {
+                                 comparisons = ref_comparisons()) {
   s <- spec_row(spec, outcome_var)
-  grid_diffs |>
+  p <- grid_diffs |>
     filter(outcome == outcome_var, comparison %in% comparisons) |>
     filter_line_coverage(coverage) |>
     mutate(coverage   = coverage_factor(prop_I_suspected),
@@ -2074,12 +2099,14 @@ plot_grid_diff_lines <- function(grid_diffs,
     geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
     geom_line(linewidth = 0.6) +
     geom_point(size = 0.7) +
-    facet_wrap(~ comparison, drop = FALSE) +
+    facet_wrap(~ comparison, drop = FALSE, axes = "all_y") +
     grid_coverage_colour +
     scale_x_continuous("Test sensitivity", labels = scales::percent) +
-    scale_y_continuous("Difference (negative = fewer)", labels = fmt_labels(s$fmt, diff = TRUE)) +
-    labs(title = paste0(s$label, ": differences from P1 (no isolation)")) +
+    scale_y_continuous(NULL, labels = fmt_labels(s$fmt, diff = TRUE)) +
+    labs(title    = paste0(s$label, ": differences from P1 (no isolation)"),
+         subtitle = if (s$fmt == "n") "Difference per year (negative = fewer than P1)" else "Difference (negative = lower than P1)") +
     grid_theme
+  blank_first_panel(p)
 }
 
 ### iii) Heatmap: test sensitivity (x) by testing coverage (y) ####
@@ -2092,7 +2119,7 @@ plot_grid_outcome_heatmap <- function(grid_long, outcome_var, spec = grid_outcom
     filter(outcome == outcome_var) |>
     ggplot(aes(test_sens, prop_I_suspected, fill = value)) +
     geom_tile() +
-    facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels)) +
+    facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels), axes = "all_y") +
     scale_fill_viridis_c(
       fill_label %||% s$label,
       labels    = fmt_labels(s$fmt),
@@ -2106,47 +2133,80 @@ plot_grid_outcome_heatmap <- function(grid_long, outcome_var, spec = grid_outcom
     grid_theme
 }
 
-### iv) Heatmap of differences between policies ####
+### iv) Heatmap of differences from the reference policy ####
 
-# Yellow = largest negative difference (most reduction), purple = largest positive difference.
-plot_grid_diff_heatmap <- function(grid_diffs, outcome_var, spec = grid_outcome_spec) {
+# P2 vs P1 and P3 vs P1, laid out like plot_grid_outcome_heatmap() with the first panel (under P1)
+# left empty and a y axis on each panel. Yellow = largest negative difference (most reduction),
+# purple = largest positive difference. Returns a gtable.
+plot_grid_diff_heatmap <- function(grid_diffs, outcome_var, spec = grid_outcome_spec,
+                                   comparisons = ref_comparisons()) {
   s <- spec_row(spec, outcome_var)
-  grid_diffs |>
-    filter(outcome == outcome_var) |>
+  p <- grid_diffs |>
+    filter(outcome == outcome_var, comparison %in% comparisons) |>
+    mutate(comparison = factor(as.character(comparison), levels = c(" ", comparisons))) |>
     ggplot(aes(test_sens, prop_I_suspected, fill = diff)) +
     geom_tile() +
-    facet_wrap(~ comparison) +
+    facet_wrap(~ comparison, drop = FALSE, axes = "all_y") +
     scale_fill_viridis_c(
-      "Difference (negative = fewer)",
+      if (s$fmt == "n") "Difference per year from P1 (negative = fewer)" else "Difference from P1 (negative = lower)",
       labels    = fmt_labels(s$fmt, diff = TRUE),
       direction = -1,
       guide     = guide_colourbar(barwidth = unit(6, "cm"), barheight = unit(0.3, "cm"))
     ) +
     scale_x_continuous("Test sensitivity", labels = scales::percent, expand = c(0, 0)) +
-    scale_y_continuous(coverage_axis_label_wrapped, labels = scales::percent, expand = c(0, 0)) +
+    scale_y_continuous(NULL, labels = scales::percent, expand = c(0, 0)) +
     coord_fixed() +
-    labs(title = paste0(s$label, ": differences between isolation policies")) +
+    labs(title = paste0(s$label, ": differences from P1 (no isolation)")) +
     grid_theme
+  blank_first_panel(p)
 }
 
-## h) Outcomes avoided by improving test sensitivity ####
+# Heatmaps of the outcome for each policy (top row) and of the differences from P1 (bottom row,
+# under P2 and P3), in one figure.
+plot_grid_heatmaps_with_diffs <- function(grid_long, grid_diffs, outcome_var,
+                                          spec = grid_outcome_spec) {
+  cowplot::plot_grid(plot_grid_outcome_heatmap(grid_long, outcome_var, spec = spec),
+                     plot_grid_diff_heatmap(grid_diffs, outcome_var, spec = spec),
+                     ncol = 1, align = "v", axis = "lr")
+}
 
-# How the change is reported for each outcome. direction = "avoided": value at sens_from minus value
-# at sens_to (positive = fewer with the better test). direction = "additional": value at sens_to
-# minus value at sens_from (positive = more with the better test), used for side-room bed-days,
-# which rise as more cases are confirmed and isolated.
+## h) Change in outcomes from improving test sensitivity ####
+
+# How the change is reported for each outcome:
+#   direction = "avoided":    value at sens_from minus value at sens_to (positive = less of the
+#                             outcome with the better test; a negative value is an increase)
+#   direction = "additional": value at sens_to minus value at sens_from (positive = more with the
+#                             better test), used for side-room bed-days, which rise as more cases are
+#                             confirmed and isolated
+#   direction = "change":     value at sens_to minus value at sens_from, used for the proportions of
+#                             cases confirmed (1c, 1d), in percentage points
+# Counts (fmt "n") are per year.
 sensitivity_gain_spec <- grid_outcome_spec |>
   mutate(
-    direction = if_else(variable == "side_room_bed_days", "additional", "avoided"),
-    title     = case_when(
-      variable == "side_room_bed_days" ~ "Additional side-room patient bed-days",
-      variable == "cum_total_test"     ~ "Faecal specimen tests avoided",
-      TRUE                             ~ paste(label, "avoided")
+    direction = case_when(
+      variable == "side_room_bed_days"                               ~ "additional",
+      variable %in% c("prop_confirmed", "prop_confirmed_via_retest") ~ "change",
+      TRUE                                                           ~ "avoided"
+    ),
+    title = case_when(
+      variable == "cum_total_infected_incidence" ~ "1a) Incident CDI cases avoided",
+      variable == "cum_total_missed_cases"       ~ "1b) Missed CDI cases avoided",
+      variable == "prop_confirmed"               ~ "1c) Change in the proportion of CDI cases confirmed",
+      variable == "prop_confirmed_via_retest"    ~ "1d) Change in the proportion of CDI cases confirmed via retest (estimated)",
+      variable == "cum_hospital_attributable_I"  ~ "2a) Hospital-acquired CDI cases avoided (estimated)",
+      variable == "diff_prev_C"                  ~ "2b) Reduction in the difference in colonisation prevalence, discharge vs admission",
+      variable == "diff_prev_CDI"                ~ "2b) Reduction in the difference in CDI prevalence, discharge vs admission",
+      variable == "hospital_bed_days"            ~ "3a) Patient bed-days avoided",
+      variable == "side_room_bed_days"           ~ "3c) Additional side-room patient bed-days",
+      variable == "cum_total_test"               ~ "3e) Faecal specimen tests avoided",
+      variable == "tests_per_confirmed"          ~ "3f) Reduction in faecal specimens tested per confirmed CDI case",
+      TRUE                                       ~ paste(label, "avoided")
     )
   )
 
-# For each outcome, isolation policy and testing coverage: values at sens_from and sens_to (annual,
-# from the grid_long values), and the change reported as set in sensitivity_gain_spec (column gain).
+# For each outcome, isolation policy and testing coverage: values at sens_from and sens_to (annual
+# counts, from the grid_long values), and the change reported as set in sensitivity_gain_spec
+# (column gain).
 make_sensitivity_gain <- function(grid_long, sens_from, sens_to, spec = sensitivity_gain_spec) {
   available <- unique(round(grid_long$test_sens, 6))
   missing   <- setdiff(round(c(sens_from, sens_to), 6), available)
@@ -2160,47 +2220,70 @@ make_sensitivity_gain <- function(grid_long, sens_from, sens_to, spec = sensitiv
     select(outcome, isolation_policy, prop_I_suspected, sens, value) |>
     pivot_wider(names_from = sens, values_from = value) |>
     left_join(spec |> select(variable, direction), by = c("outcome" = "variable")) |>
-    mutate(gain = if_else(direction == "additional", value_to - value_from, value_from - value_to)) |>
+    mutate(gain = if_else(direction == "avoided", value_from - value_to, value_to - value_from)) |>
     arrange(outcome, isolation_policy, prop_I_suspected)
 }
 
-# Title for one outcome, e.g. "CDI cases avoided per year by increasing test sensitivity from 50% to
-# 80%"
+# Title for one outcome, e.g. "1a) Incident CDI cases avoided per year by increasing test
+# sensitivity from 50% to 80%" ("per year" for counts only)
 sensitivity_gain_title <- function(outcome_var, sens_from, sens_to, spec = sensitivity_gain_spec) {
-  paste0(spec$title[spec$variable == outcome_var], " per year by increasing test sensitivity from ",
+  s <- spec_row(spec, outcome_var)
+  paste0(s$title, if (s$fmt == "n") " per year" else "", " by increasing test sensitivity from ",
          scales::percent(sens_from), " to ", scales::percent(sens_to))
 }
 
+# Values of the change are labelled in the outcome's units (percentage points for proportions and
+# prevalence differences)
+gain_labels <- function(fmt) {
+  switch(fmt,
+    pct  = scales::label_number(scale = 100, accuracy = 0.1, suffix = " pp", style_positive = "plus"),
+    pp   = scales::label_number(scale = 100, accuracy = 0.01, suffix = " pp", style_positive = "plus"),
+    rate = scales::label_number(accuracy = 0.01),
+    scales::label_comma(accuracy = 1))
+}
+
 # Table for one outcome: testing coverage (rows) by isolation policy (columns)
-make_sensitivity_gain_table <- function(gain, outcome_var, coverage = grid_line_coverage) {
+make_sensitivity_gain_table <- function(gain, outcome_var, coverage = grid_line_coverage,
+                                        spec = sensitivity_gain_spec) {
+  lab <- gain_labels(spec_row(spec, outcome_var)$fmt)
   gain |>
     filter(outcome == outcome_var) |>
     filter_line_coverage(coverage) |>
     mutate(coverage = scales::percent(prop_I_suspected),
            policy   = isolation_policy_labels[as.character(isolation_policy)],
-           gain     = scales::comma(round(gain))) |>
+           gain     = if_else(is.na(gain), "-", lab(gain))) |>
     select(coverage, policy, gain) |>
     pivot_wider(names_from = policy, values_from = gain) |>
     rename(!!coverage_axis_label := coverage)
 }
 
-# Chart for one outcome: change against testing coverage, one line per isolation policy
+# Shades of one base colour for the isolation policies, from lightest (P1) to darkest (P3): each
+# shade is the base colour at the given strength (mixed with white).
+policy_shades <- function(base = "#08519C", strength = c(0.4, 0.6, 0.8)) {
+  ramp <- grDevices::colorRampPalette(c("white", base))(101)
+  set_names(ramp[round(100 * strength) + 1], isolation_policy_levels)
+}
+
+# Chart for one outcome: change against testing coverage, one line per isolation policy (shades of
+# one colour: P1 lightest, P3 darkest)
 plot_sensitivity_gain <- function(gain, outcome_var, sens_from, sens_to, spec = sensitivity_gain_spec) {
-  y_lab <- if (spec$direction[spec$variable == outcome_var] == "additional") {
-    "Additional per year (negative = decrease)"
-  } else {
-    "Avoided per year (negative = increase)"
-  }
+  s <- spec_row(spec, outcome_var)
+  unit <- if (s$fmt %in% c("pct", "pp")) " (percentage points)" else if (s$fmt == "n") " per year" else ""
+  y_lab <- switch(s$direction,
+    additional = paste0("Additional", unit, " (negative = decrease)"),
+    change     = paste0("Change", unit),
+    paste0("Avoided", unit, " (negative = increase)"))
   gain |>
     filter(outcome == outcome_var) |>
     ggplot(aes(prop_I_suspected, gain, colour = isolation_policy)) +
     geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
     geom_line(linewidth = 0.7) +
     geom_point(size = 1.2) +
-    scale_colour_viridis_d("Isolation policy", labels = \(x) isolation_policy_labels[x], end = 0.8) +
+    scale_colour_manual("Isolation policy", values = policy_shades(),
+                        labels = \(x) isolation_policy_labels[x]) +
     scale_x_continuous(coverage_axis_label, labels = scales::percent, breaks = seq(0, 1, 0.2)) +
-    scale_y_continuous(y_lab, labels = scales::comma) +
-    labs(title = sensitivity_gain_title(outcome_var, sens_from, sens_to, spec)) +
+    scale_y_continuous(y_lab, labels = gain_labels(s$fmt)) +
+    labs(title = stringr::str_wrap(sensitivity_gain_title(outcome_var, sens_from, sens_to, spec), 80)) +
     grid_theme +
     guides(colour = guide_legend(ncol = 1))
 }
