@@ -12,12 +12,13 @@
 #   source("render_run.R")
 #   render_run("A")
 #   render_run("B")
+#   render_run("YYYYMMDD")
 
 render_run <- function(label) {
 
   if (!nzchar(label)) stop("label must be a non-empty string")
 
-  output_file <- paste0(format(Sys.Date(), "%y%m%d"), "_Model1_ODE_Model_Run_", label, ".html")
+  output_file <- paste0(label, "_C_diff_Model1_Run", ".html")
 
   quarto::quarto_render(
     input          = "Model1_ODE_Model_Run.qmd",

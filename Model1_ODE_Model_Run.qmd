@@ -108,7 +108,11 @@ Default parameter values are given in brackets; they are set in `Scripts/Model1_
 
 Load libraries, set options, and create an output directory for this run.
 
+The grid results from running the model (section 6) are cached in `grid_runs.rds` in the output folder. If `grid_clear_cache <- FALSE`, they are re-used on the next render if the scenario grid, fixed parameters, run settings, initial conditions and the model, parameter, validation, grid-running and post-processing functions are unchanged; otherwise the grid is re-run. Set `grid_clear_cache <- TRUE` to force a re-run.
+
 ```{r}
+#| label: initial-setup
+ 
 rm(list = setdiff(ls(), "params"))
 library(tidyverse)
 library(deSolve)
@@ -118,6 +122,8 @@ library(dplyr)
 options(scipen = 1000)
 output_dir <- file.path("Outputs", params$run_label)
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+
+grid_clear_cache <- FALSE
 ```
 
 ## 2) Source parameters and functions
@@ -125,17 +131,21 @@ dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 Source the ODE functions and parameter sets for the model. The functions include the ODE system definition, scenario running functions, and various post-processing functions for summarising and plotting results. The parameters script defines the fixed model parameters (e.g., transmission rates, recovery rates, test turnaround time) and the `make_mod_parms()` function used to build each scenario's parameter list.
 
 ```{r}
+#| label: source-parameters-and-functions
+
 source("Scripts/Model1_ODE_Functions.R")
 source("Scripts/Model1_ODE_Parameters.R")
 ```
 
-## 3) Define scenarios
+## 3) Set values for control variables
 
 Set the values of each control variable as a vector. Every combination of isolation policy, testing coverage and test sensitivity is run (the scenario grid). Scenario labels combine a policy code (`P1_none`, `P2_confirmed`, `P3_susp_conf`) with the coverage and sensitivity as percentages, e.g. `P2_confirmed_cov050_sens100`.
 
 A small set of example scenarios is taken from the grid for the time-series plots, annual summaries and outcome tables (sections 9 to 12): each isolation policy at each coverage and sensitivity setting in `example_settings`, in the order listed (by default 0%/0%, 50%/50%, 100% coverage/50% sensitivity, 50% coverage/100% sensitivity and 100%/100%; 15 scenarios). At 0% coverage nobody is tested, so the three policies give the same results; it is included as a no-testing baseline for each policy.
 
 ```{r}
+#| label: set-values-for-control-variable-values 
+
 # Control variables: every combination is run
 isolation_policy <- c("none", "confirmed", "suspected_and_confirmed")   # P1, P2, P3
 prop_I_suspected <- seq(0, 100, by = 10) / 100   # testing coverage
@@ -174,6 +184,8 @@ cat("Scenario grid:", nrow(scenario_grid), "scenarios (",
 Set the total model run time, the time step for the ODE solver and the burn-in period. The burn-in is the period at the start of the run while the model moves from its initial conditions to steady state; it is excluded from all cumulative totals, patient-days and annual summaries, which cover the analysis period after it. The burn-in is the same for every scenario, so all totals cover the same length of time (here a 1-year burn-in and a 5-year analysis period, in a 6-year run). Sections 11 to 14 show annual totals (the analysis-period total divided by its length in years), for comparison with surveillance data. Section 8 checks that every scenario has stabilised before the end of the burn-in, and stops the render if not. Validate that the settings are appropriate (all positive, the time step smaller than the model time, and the burn-in shorter than the model time). Create a sequence of time points for the model output.
 
 ```{r}
+#| label: model-settings
+
 run_settings <- list(
   model_time = 365 * 6,
   time_step  = 0.5,
@@ -192,6 +204,8 @@ mod.t      <- seq(0, model_time, by = time_step)
 Set the initial conditions for the model states (S, C, I, Xtest, FN, Xtreat, D) at time 0. These values represent the starting point of the simulation and can be adjusted as needed for different scenarios or sensitivity analyses.
 
 ```{r}
+#| label: initial-conditions
+
 S0      <- 909
 C0      <- 86
 I0      <- 5
@@ -214,12 +228,16 @@ mod.init <- c(
 
 Run the ODE model for every scenario in the grid using `run_scenario_grid()`. Each run is post-processed with `add_quantities()`, which multiplies each output row by the time step to give per-step flows and patient-days (rows in the burn-in, including time 0, are given zero width, so cumulative totals cover exactly the analysis period after the burn-in), and immediately summarised (parameters, final cumulative outcomes, patient-days, stabilisation and any negative values), so full time series are not kept for the whole grid.
 
-The grid results are cached in `grid_runs.rds` in the output folder. They are re-used on the next render if the scenario grid, fixed parameters, run settings, initial conditions and the model, parameter, validation, grid-running and post-processing functions are unchanged; otherwise the grid is re-run. Set `grid_clear_cache <- TRUE` to force a re-run. The grid runs in parallel on `grid_n_cores` CPU cores (default: all physical cores but one); set it to 1 to run one scenario at a time in this session.
+The grid results are cached in `grid_runs.rds` in the output folder. They are re-used on the next render if the scenario grid, fixed parameters, run settings, initial conditions and the model, parameter, validation, grid-running and post-processing functions are unchanged; otherwise the grid is re-run. Set `grid_clear_cache <- TRUE` in the setup section 1) to force a re-run, or FALSE to use the cached grid results.
+
+The grid runs in parallel on `grid_n_cores` CPU cores (default: all physical cores but one); set it to 1 to run one scenario at a time in this session.
 
 The example scenarios are then re-run to keep their full time series, which are saved as `solution_<scenario>.csv`.
 
 ```{r}
-grid_clear_cache <- FALSE
+
+#| label: run-scenarios
+
 grid_cache_file  <- file.path(output_dir, "grid_runs.rds")
 
 # Number of CPU cores used to run the grid in parallel (1 = run in this session, one at a time)
@@ -291,6 +309,8 @@ patient_days_summary <- grid_runs$patient_days |>
 Check for any negative values in the model states or flows, which may indicate numerical issues with the ODE solver or problems with the model structure. The `negative_value_rows` function identifies rows in the data frame where any state or flow has a negative value. This is checked for every scenario in the grid, and all negative rows are saved to one CSV for further investigation.
 
 ```{r}
+#| label: negative_values_check
+
 neg_combined <- grid_runs$negatives
 
 # Output to screen
@@ -310,6 +330,8 @@ write_csv(neg_combined, file.path(output_dir, "all_negative_rows_combined.csv"))
 Identify the day on which the model states stabilise for every scenario in the grid using the `stabilisation_summary` function. This function determines when the values of the states reach a steady state (i.e., change by less than a tolerance of 1e-4 per time step for a specified number of consecutive time steps). Note that the `consecutive_days` setting and output column count time steps, not days: the default of 10 is 10 half-day steps, i.e. 5 days. The full summary for all scenarios is saved as a CSV; the table shows the example scenarios. The burn-in (section 4) must be longer than the stabilisation period of every scenario, so that the totals cover steady-state behaviour only: if any scenario has not stabilised by the end of the burn-in, the render stops with an error listing those scenarios, and `burn_in` (and `model_time`) should be increased. The longest stabilisation period across the example scenarios sets the time window for the time-series plots in section 9, which therefore show the approach to steady state during the burn-in.
 
 ```{r}
+#| label: stabilisation-summary
+
 stability_all <- grid_runs$stability
 write_csv(stability_all,
           file.path(output_dir, "stabilisation_summary_states_flows.csv"))
@@ -390,6 +412,7 @@ The tabs show the saved PNG files.
 #| label: time-series-plots-tabs
 #| echo: false
 #| results: asis
+
 for (i in seq_len(nrow(time_series_plots))) {
   cat("\n\n### ", time_series_plots$title[i], "\n\n", sep = "")
   cat("![](", time_series_plots$path[i], "){width=100%}\n\n", sep = "")
@@ -402,6 +425,8 @@ for (i in seq_len(nrow(time_series_plots))) {
 Create annual summary tables for each example scenario using the `make_annual_summary` function, which calculates annual totals for flow quantities and patient-days. Years are counted from the end of the burn-in (year 1 is the first year of the analysis period); the burn-in is excluded. Combine the annual summaries into a single data frame and save it as a CSV (`annual_summary_all.csv`, every year of the analysis period). As every scenario has stabilised before the end of the burn-in, each year of the analysis period is the same, so the table shows year 1 only.
 
 ```{r}
+#| label: annual-summary-tables
+
 annual_summary_all <- bind_rows(Map(make_annual_summary, scenario_post, names(scenario_post)))
 write_csv(annual_summary_all,
           file.path(output_dir, "annual_summary_all.csv"))
@@ -421,7 +446,8 @@ Stacked bar plots of annual totals over the analysis period after the burn-in, f
 - **Bed-days by bed type**: patient bed-days per year in general ward beds and in side rooms (suspected cases, isolated under P3 only, and confirmed cases, isolated under P2 and P3, combined). The top of each stack is total patient bed-days; divide by 365 for the average number of occupied beds.
 
 ```{r}
-#| label: annual-plots-save
+#| label: annual-summaries-plots
+
 annual_plots <- tribble(
   ~file,                          ~title,                     ~plot,
   "plot_colonisations_by_source", "Colonisations by source",  plot_colonisation_sources_bar(example_annual_outcomes),
@@ -441,7 +467,7 @@ The tabs show the saved PNG files.
 
 ::: panel-tabset
 ```{r}
-#| label: annual-plots-tabs
+#| label: annual-summaries-plots-tabs
 #| echo: false
 #| results: asis
 for (i in seq_len(nrow(annual_plots))) {
@@ -455,7 +481,7 @@ for (i in seq_len(nrow(annual_plots))) {
 
 Sections 12 to 14 present the results for the write-up (sections 9 to 11 are verification checks on the example scenarios).
 
-### Research questions
+**Research questions**
 
 The model is designed to focus on diagnostic testing of hospital patients with CDI. It does not include testing of symptomatic patients without CDI, or screening asymptomatic patients.
 
@@ -495,34 +521,43 @@ b)  hospital-acquired CDI is estimated by apportioning the flow from C to I by t
     c)  the number of incident CDI cases that die in hospital (with no specimen sent for testing, awaiting a test result, awaiting re-testing following a false negative test result, or during treatment);
     d)  number of CDI-attributable deaths in hospital (accounting for deaths that may have occurred due to other causes).
 
-**Cost effectiveness analysis**
+**Outputs required for cost effectiveness analysis (CEA) or cost utility analysis (CUA)**
 
-This involves calculation of Incremental Cost Effectiveness Ratios (ICERs) for specific changes in testing or isolation policy, that allows comparison of multiple outcomes within a single metric (£ cost per avoided QALY loss, or £ cost per avoided hospital-acquired CDI case). It would require information on the hospital resource costs (specimen collection and testing, side room and general ward patient care, CDI treatment) and patient welfare values for untreated, treated/recovered CDI cases and deaths from CDI (discounted QALY losses).
+CEA involves calculation of Incremental Cost Effectiveness Ratios (ICERs) for specific changes in testing or isolation policy, that allows comparison of multiple outcomes within a single metric, cost per avoided hospital-acquired CDI case. For cost-utility analysis the metric is £ cost per avoided QALY loss. CEA and CUA would require information on the hospital resource costs (specimen collection and testing, side room and general ward patient care, CDI treatment). CUA would require patient welfare values for untreated, treated/recovered CDI cases and deaths from CDI (discounted QALY losses).
 
-The analysis would not take account of outcomes for CDI cases that occur in the community, as a result of:
+The CEA/CUA would not take account of outcomes for CDI cases that occur in the community, as a result of:
 
 a)  discharged colonisations that progress to infection;
 b)  onwards transmission from discharged colonised or infected patients.
 
 Model outcomes required for calculation of an ICER for a change in testing or isolation are shown in the tables below.
 
-| Model outcome (ICER numerator, change in costs) | ICER numerator |
-|---|---|
+**ICER numerator, change in costs**
+
+| Model outcome | ICER numerator |
+|------------------------------------|------------------------------------|
 | Number of patient days on a general ward | × general ward care, cost per day |
 | Number of patient days in a side room | × side room care, cost per day |
 | Number of confirmed CDI cases | × CDI antimicrobial therapy, cost per course of treatment |
 | Number of faecal specimens tested for CDI | × specimen collection and testing, cost per specimen |
 
-| Model outcome (ICER denominator, avoided QALY loss or avoided hospital-acquired CDI case) | ICER denominator |
-|---|---|
-| Number of treated, recovered CDI cases | × QALY loss for treated cases |
-| Number of untreated, discharged cases | × QALY loss for untreated cases |
-| Number of CDI-attributable deaths | × discounted QALY loss for deaths |
-| Number of hospital-acquired CDI cases | |
+**ICER denominator, avoided hospital-acquired CDI case**
+
+| Model outcome                         | ICER denominator |
+|---------------------------------------|------------------|
+| Number of hospital-acquired CDI cases |                  |
+
+**ICER denominator, avoided QALY loss**
+
+| Model outcome                          | ICER denominator                  |
+|------------------------------------|------------------------------------|
+| Number of treated, recovered CDI cases | × QALY loss for treated cases     |
+| Number of untreated, discharged cases  | × QALY loss for untreated cases   |
+| Number of CDI-attributable deaths      | × discounted QALY loss for deaths |
 
 Extending the model to include probabilistic analysis, with distributions for uncertain parameters would allow value of information analysis.
 
-### Research question outcomes table
+**Research question outcomes table**
 
 The table shows the outcomes of interest for the example scenarios, numbered as above, as annual totals after the burn-in, followed by the model outcomes required for the ICER numerator and denominator. Notes:
 
@@ -541,6 +576,8 @@ Final cumulative outcomes for every scenario in the grid (totals over the `r ana
 - `grid_rates.csv`: rates per 10,000 patient bed-days (CDI, hospital-onset CDI, hospital-acquired CDI, faecal specimens tested), the proportion of patient bed-days in a side room, the proportion of CDI cases missed, and missed cases per year by origin, for every scenario, in long format
 
 ```{r}
+#| label: research-questions-outcomes-table
+
 write_csv(grid_results, file.path(output_dir, "final_outcomes_all.csv"))
 write_csv(grid_long,    file.path(output_dir, "grid_key_outcomes.csv"))
 write_csv(grid_diffs,   file.path(output_dir, "grid_key_outcome_differences.csv"))

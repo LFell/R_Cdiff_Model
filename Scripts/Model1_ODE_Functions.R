@@ -2259,7 +2259,7 @@ make_sensitivity_gain_table <- function(gain, outcome_var, coverage = grid_line_
 
 # Shades of one base colour for the isolation policies, from lightest (P1) to darkest (P3): each
 # shade is the base colour at the given strength (mixed with white).
-policy_shades <- function(base = "#08519C", strength = c(0.4, 0.6, 0.8)) {
+policy_shades <- function(base = "#08519C", strength = c(0.4, 0.7, 1.0)) {
   ramp <- grDevices::colorRampPalette(c("white", base))(101)
   set_names(ramp[round(100 * strength) + 1], isolation_policy_levels)
 }
