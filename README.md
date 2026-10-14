@@ -148,14 +148,16 @@ are computed in post-processing.
 ```         
 R_Cdiff_Model/
 ├── Model1_ODE_Model_Run.qmd           # Main analysis document
-├── render_run.R                       # Utility script for labelled runs
+├── Model1_ODE_OAT_Run.qmd             # One-at-a-time parameter testing (verification)
+├── render_run.R                       # render_run() / render_oat() for labelled runs
 ├── renv.lock, renv/, .Rprofile       # renv package library for this project
 ├── Scripts/
 │   ├── Model1_ODE_Parameters.R        # Parameters and scenario builder
-│   ├── Model1_ODE_Functions.R         # ODE, post-processing, scenario grid and plot functions
-│   └── Model1_ODE_OAT_parameter_testing.R  # One-at-a-time sensitivity testing
+│   └── Model1_ODE_Functions.R         # ODE, post-processing, scenario grid and plot functions
 └── Outputs/
-    └── <run_label>/                   # One folder per labelled run
+    ├── <run_label>/                   # One folder per labelled model run
+    └── OAT/
+        └── <run_label>/               # One folder per labelled OAT run
 ```
 
 ### `Scripts/Model1_ODE_Parameters.R`
@@ -210,16 +212,18 @@ Defines:
   `plot_discharges_by_state_area_noS()`, `plot_case_outcomes_bar()`,
   `plot_bed_days_bar()`, `plot_scenario_params()`.
 
-### `Scripts/Model1_ODE_OAT_parameter_testing.R`
+### `Model1_ODE_OAT_Run.qmd`
 
-A standalone model verification script — **not for analysis**. Runs a
+A standalone model verification document — **not for analysis**. Runs a
 systematic one-at-a-time (OAT) sensitivity test to confirm that the ODE
 model responds in the expected direction when each parameter is varied
-individually, with all others held at their defaults.
+individually, with all others held at their defaults. Render it with
+`render_oat("<label>")` (see **Run instructions**); the HTML report shows
+the pass/fail counts, any failed tests and the plots.
 
 **What it tests:**
 
-For each of 23 fixed parameters (including `t_test_turnaround`), the
+For each of 24 fixed parameters (including `t_test_turnaround`), the
 model is run at two values at a single baseline of test settings (50%
 testing coverage, 50% test sensitivity, so the untested,
 false-negative and retesting pathways are all active) under each of the
@@ -261,23 +265,24 @@ The % change (high vs low) in the ten cumulative outcomes compared across
 the scenario grid (see section 13 of the QMD) is also reported for
 inspection, without expected directions.
 
-**Files produced:**
+**Files produced** (in `Outputs/OAT/<run_label>/`; files from runs of
+the old `.R` script are in `Outputs/OAT/legacy/`):
 
-- `Outputs/oat_specs.csv` — test specification table (one row per
+- `oat_specs.csv` — test specification table (one row per
   parameter, with low/baseline/high values, expected directions, and
   rationale notes).
-- `Outputs/oat_specs_policy_overrides.csv` — expected directions that
+- `oat_specs_policy_overrides.csv` — expected directions that
   differ under the `"confirmed"` or `"none"` policy.
-- `Outputs/oat_results.csv` — low/high values, expected and actual
+- `oat_results.csv` — low/high values, expected and actual
   directions and pass/fail for each parameter × isolation policy.
-- `Outputs/oat_outcomes_pct_change.csv` — low/high values and % change
+- `oat_outcomes_pct_change.csv` — low/high values and % change
   in each cumulative outcome for each parameter × isolation policy.
-- `Outputs/combined_oat_plot.png` — four-panel figure comprising:
+- `combined_oat_plot.png` — four-panel figure comprising:
   tornado charts of percentage change (high vs low) for each of the
   three assessed outputs, coloured by isolation policy, and a pass/fail
   heatmap across all parameters and output checks, faceted by isolation
   policy.
-- `Outputs/oat_tornado_cumulative_outcomes.png` — tornado charts of
+- `oat_tornado_cumulative_outcomes.png` — tornado charts of
   percentage change in each of the ten cumulative outcomes, coloured by
   isolation policy.
 
@@ -312,9 +317,10 @@ Accepts a `run_label` parameter (see **Run instructions** below).
 
 ### `render_run.R`
 
-Utility script for running the model with a labelled output folder.
-Source this file by calling `source("render_run.R")` and call
-`render_run("A")` from the R console.
+Utility script for rendering with a labelled output folder. Source this
+file by calling `source("render_run.R")`, then call `render_run("A")`
+(main model run) or `render_oat("A")` (OAT parameter testing) from the
+R console.
 
 ------------------------------------------------------------------------
 
@@ -370,6 +376,18 @@ To run a second set of scenarios, edit the scenario values again and
 call `render_run("B")`, and so on. The `run_label` in the QMD YAML does
 not need to be changed — `render_run()` overrides it.
 
+### OAT parameter testing
+
+``` r
+source("render_run.R")
+render_oat("20261014")
+```
+
+This renders `Model1_ODE_OAT_Run.qmd`, saves its CSVs and plots to
+`Outputs/OAT/20261014/` and produces `20261014_C_diff_Model1_OAT.html` in
+the project root. As with `render_run()`, re-using a label overwrites that
+run.
+
 ### Interactive rendering (quick checks)
 
 You can also click **Render** in RStudio, which uses the default
@@ -406,7 +424,7 @@ a labelled output folder.
   listing any that are not, so `burn_in` can be increased. Time-series plots show data up to
   the longest stabilisation period across the example scenarios, i.e.
   the approach to steady state during the burn-in.
-- The OAT script uses the same 1-year burn-in on its 3-year runs.
+- The OAT document uses the same 1-year burn-in on its 3-year runs.
 
 ------------------------------------------------------------------------
 
