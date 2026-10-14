@@ -356,13 +356,13 @@ This will:
 
 - execute the QMD in a fresh R session,
 - save all CSVs and plots to `Outputs/A/`,
-- produce `YYMMDD_Model1_ODE_Model_Run_A.html` in the project root,
-  prefixed with today's date (e.g. `261008_Model1_ODE_Model_Run_A.html`),
-  so reports from earlier days are kept for comparison. Rendering the
-  same label again on the same day overwrites that day's file.
+- produce `A_C_diff_Model1_Run.html` in the project root. Rendering the
+  same label again overwrites it (and `Outputs/A/`), so to keep an
+  earlier report for comparison use a new label, e.g. a date
+  (`render_run("20261014")`).
 
 The HTML is self-contained (`embed-resources: true` in the QMD YAML): the
-plots are embedded in the file, so each dated report keeps its own plots
+plots are embedded in the file, so each report keeps its own plots
 even after `Outputs/A/` is overwritten by a later run, and the HTML can be
 moved or shared on its own (about 10 MB).
 
@@ -835,5 +835,5 @@ Example scenarios only:
   and `plot_bed_days_bar.png` (patient bed-days per year in general ward
   beds and in side rooms)
 
-The rendered HTML (`YYMMDD_Model1_ODE_Model_Run_<run_label>.html`) embeds
+The rendered HTML (`<run_label>_C_diff_Model1_Run.html`) embeds
 these plots, so it can be moved or shared without the `Outputs/` folder.

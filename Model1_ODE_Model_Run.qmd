@@ -144,7 +144,7 @@ Set the values of each control variable as a vector. Every combination of isolat
 A small set of example scenarios is taken from the grid for the time-series plots, annual summaries and outcome tables (sections 9 to 12): each isolation policy at each coverage and sensitivity setting in `example_settings`, in the order listed (by default 0%/0%, 50%/50%, 100% coverage/50% sensitivity, 50% coverage/100% sensitivity and 100%/100%; 15 scenarios). At 0% coverage nobody is tested, so the three policies give the same results; it is included as a no-testing baseline for each policy.
 
 ```{r}
-#| label: set-values-for-control-variable-values 
+#| label: set-values-for-control-variable-values
 
 # Control variables: every combination is run
 isolation_policy <- c("none", "confirmed", "suspected_and_confirmed")   # P1, P2, P3
@@ -235,7 +235,6 @@ The grid runs in parallel on `grid_n_cores` CPU cores (default: all physical cor
 The example scenarios are then re-run to keep their full time series, which are saved as `solution_<scenario>.csv`.
 
 ```{r}
-
 #| label: run-scenarios
 
 grid_cache_file  <- file.path(output_dir, "grid_runs.rds")

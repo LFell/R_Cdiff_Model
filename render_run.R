@@ -2,11 +2,10 @@
 #
 # Renders Model1_ODE_Model_Run.qmd with a given run label.
 # All outputs (CSVs and plots) are saved to Outputs/<label>/
-# The rendered HTML is saved as YYMMDD_Model1_ODE_Model_Run_<label>.html, prefixed with today's date
-# (the folder's usual date-prefix convention), so earlier reports are kept for comparison. Rendering
-# the same label again on the same day overwrites that day's file. The HTML is self-contained
-# (embed-resources in the QMD YAML), so each dated copy keeps its own plots even after Outputs/<label>/
-# is overwritten by a later run.
+# The rendered HTML is saved as <label>_C_diff_Model1_Run.html in the project root. Rendering the
+# same label again overwrites that file (and Outputs/<label>/), so use a new label, e.g. a date, to
+# keep an earlier report for comparison. The HTML is self-contained (embed-resources in the QMD
+# YAML), so each copy keeps its own plots even after Outputs/<label>/ is overwritten by a later run.
 #
 # Usage:
 #   source("render_run.R")
