@@ -1,0 +1,443 @@
+---
+title: "Model 1: transfer states vs transfer time in rates (P2 and P3)"
+format:
+  html:
+    toc: true
+    code-fold: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+params:
+  run_label: "default"
+---
+
+## Purpose
+
+This is a test document. It compares two ways of handling patient transfers between a general ward and a side room under P2 (confirmed cases isolated) and P3 (suspected and confirmed cases isolated):
+
+- **Current** (`Scripts/Model1_ODE_Functions.R`, `Scripts/Model1_ODE_Parameters.R`): `t_patient_transfer` is added to the time in the denominator of each rate that involves a move: `theta` and `delta` under P2; `gamma`, `pi`, `sigma` and `delta` under P3.
+- **Transfer states** (`Scripts/Model1_ODE_Functions_T.R`, `Scripts/Model1_ODE_Parameters_T.R`): those rates no longer include transfer time. Instead, patients pass through transfer states, which they leave at rate `tau = 1 / t_patient_transfer`. Patients in a transfer state are still in their original bed.
+  - P2:
+    - **T1** (general ward): Xtest → T1 (`theta`), then T1 → Xtreat (`tau`). Confirmed but not yet treated: transmits at `betaI`, deaths at `mortI`, no discharges.
+    - **T2** (side room): Xtreat → T2 (`delta`), then T2 → S (`tau`). Recovered and non-infectious, deaths at the baseline rate, no discharges.
+  - P3:
+    - **T3** (general ward): I → T3 (`gamma`) and FN → T3 (`sigma`), then T3 → Xtest (`tau`). Transmits at `betaI`, deaths at `mortI`, no discharges.
+    - **T4** (side room): Xtest → T4 (`pi`), then T4 → FN (`tau`). Transmits at `betaI * beta_mult_isolated`, deaths at `mortI`, discharges at the FN rate.
+    - **T5** (side room): Xtreat → T5 (`delta`), then T5 → S (`tau`). Recovered and non-infectious, deaths at the baseline rate, no discharges.
+
+How the transfer states enter the outcomes (transfer-state version):
+
+- Confirmed cases are counted on leaving Xtest (into T1 under P2), as before. T1 deaths count as deaths following CDI.
+- Tests are counted when the specimen is taken, on entry to T3 under P3. Deaths in T3 are deaths awaiting a result (like Xtest), not missed cases.
+- Discharges and deaths from T4 count as missed false negative cases.
+- T2, T4 and T5 occupy side rooms. T1 and T3 are on a general ward.
+
+P1 has no transfers, so both versions should give identical P1 results; section 3 checks this.
+
+Every other parameter, the run settings (6-year run, 1-year burn-in, half-day time step) and the outcome definitions are the same as in `Model1_ODE_Model_Run.qmd`. Counts are annual totals over the 5-year analysis period.
+
+## 1) Setup and model loading
+
+Each version is sourced into its own environment, so the two sets of functions and parameters don't overwrite each other.
+
+```{r}
+#| label: setup
+
+rm(list = setdiff(ls(), "params"))
+library(tidyverse)
+library(deSolve)
+library(scales)
+options(scipen = 1000)
+
+output_dir <- file.path("Outputs", "Transfer_compare", params$run_label)
+dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+grid_clear_cache <- FALSE
+
+run_settings <- list(model_time = 365 * 6, time_step = 0.5, burn_in = 365)
+analysis_years <- (run_settings$model_time - run_settings$burn_in) / 365
+
+init_current  <- c(S = 909, C = 86, I = 5, Xtest = 0, FN = 0, Xtreat = 0, D = 0)
+init_transfer <- c(init_current[c("S", "C", "I", "Xtest", "FN", "Xtreat")],
+                   T1 = 0, T2 = 0, T3 = 0, T4 = 0, T5 = 0, D = 0)
+
+model_files <- list(
+  current  = c(fun = "Scripts/Model1_ODE_Functions.R",   par = "Scripts/Model1_ODE_Parameters.R"),
+  transfer = c(fun = "Scripts/Model1_ODE_Functions_T.R", par = "Scripts/Model1_ODE_Parameters_T.R")
+)
+
+load_model <- function(files, init) {
+  e <- new.env(parent = globalenv())
+  sys.source(files[["fun"]], envir = e)
+  suppressMessages(sys.source(files[["par"]], envir = e))
+  e$mod.init <- init
+  e$mod.t    <- seq(0, run_settings$model_time, by = run_settings$time_step)
+  e
+}
+models <- list(current  = load_model(model_files$current,  init_current),
+               transfer = load_model(model_files$transfer, init_transfer))
+
+version_labels <- c(current = "Current (transfer time in rates)", transfer = "Transfer states (T1-T5)")
+policy_short   <- c(none = "P1", confirmed = "P2", suspected_and_confirmed = "P3")
+compare_policies <- c("confirmed", "suspected_and_confirmed")
+```
+
+## 2) Run the scenario grids
+
+P1, P2 and P3 at every combination of testing coverage and test sensitivity (0% to 100% in steps of 10%), under each version. Results are cached in `grid_runs.rds` in the output folder, and re-run if the model files, grid or run settings change.
+
+```{r}
+#| label: run-grids
+
+e_cur <- models$current
+scenario_grid <- e_cur$make_scenario_grid(c("none", "confirmed", "suspected_and_confirmed"),
+                                          seq(0, 100, by = 10) / 100, seq(0, 100, by = 10) / 100)
+
+cache_file <- file.path(output_dir, "grid_runs.rds")
+cache_key  <- list(files = tools::md5sum(unlist(model_files)) |> unname(),
+                   grid = scenario_grid, run_settings = run_settings,
+                   init = list(init_current, init_transfer))
+cache <- if (!grid_clear_cache && file.exists(cache_file)) readRDS(cache_file) else NULL
+
+if (!is.null(cache) && identical(cache$key, cache_key)) {
+  grid_runs <- cache$runs
+  cat("Loaded grid results from", cache_file, "\n")
+} else {
+  n_cores <- max(1, parallel::detectCores(logical = FALSE) - 1)
+  # do.call passes evaluated values, so the parallel workers don't need run_settings
+  grid_runs <- map(models, \(e) do.call(e$run_scenario_grid,
+                                        list(scenario_grid, run_settings$time_step,
+                                             burn_in = run_settings$burn_in, n_cores = n_cores)))
+  saveRDS(list(key = cache_key, runs = grid_runs), cache_file)
+  cat("Ran", nrow(scenario_grid), "scenarios under each version\n")
+}
+
+# One row per scenario and version, with derived outcomes
+grid_results <- imap(grid_runs, \(r, v) models[[v]]$make_grid_results(scenario_grid, r) |>
+                       mutate(version = v, .before = 1)) |>
+  bind_rows()
+
+# Long format, annual totals for counts
+grid_long <- grid_results |>
+  group_split(version) |>
+  map(\(d) e_cur$make_grid_outcomes_long(d, years = analysis_years) |>
+        mutate(version = d$version[1])) |>
+  bind_rows() |>
+  mutate(version = factor(version, levels = names(version_labels)))
+
+write_csv(grid_results, file.path(output_dir, "grid_results_both_versions.csv"))
+
+# Stabilisation and negative values checks
+stab <- imap(grid_runs, \(r, v) mutate(r$stability, version = v)) |> bind_rows()
+late <- stab |> filter(!stabilised | stabilisation_day >= run_settings$burn_in)
+neg  <- imap(grid_runs, \(r, v) mutate(r$negatives, version = v)) |> bind_rows()
+cat("Scenarios not stabilised before the end of the burn-in:", nrow(late), "\n")
+cat("Rows with negative values:", nrow(neg), "\n")
+```
+
+## 3) Check: P1 is identical under both versions
+
+```{r}
+#| label: p1-check
+
+num_cols <- grid_results |> select(where(is.numeric), -prop_I_suspected, -test_sens) |> names()
+p1_diff <- grid_results |>
+  filter(isolation_policy == "none") |>
+  select(version, scenario, all_of(num_cols)) |>
+  pivot_longer(all_of(num_cols)) |>
+  pivot_wider(names_from = version, values_from = value) |>
+  mutate(abs_diff = abs(transfer - current))
+cat("Largest absolute difference across all P1 scenarios and outcomes:",
+    signif(max(p1_diff$abs_diff, na.rm = TRUE), 3), "\n")
+```
+
+## 3b) Check: P2 and P3 converge as transfer time approaches 0
+
+The two versions differ only in how patient transfer time is handled, so they should give the same results when transfers take no time. `t_patient_transfer` can't be set to exactly 0: the parameter validation requires it to be > 0, and in the transfer-state version the rate out of the transfer states (`tau = 1 / t_patient_transfer`) would be infinite. Instead, both versions are run with shorter and shorter transfer times (overriding the fixed value in `make_mod_parms()`), and the differences between them should shrink towards 0.
+
+The check uses P2 and P3 at three settings with testing (coverage / sensitivity 50% / 50%, 100% / 50% and 100% / 100%) and the outcomes compared across the grid (section 5). It reports:
+
+1. **Side-room patient bed-days** (outcome 3c), for each transfer time, policy and setting, under both versions. Side-room use is the main difference between the isolation policies and the outcome most directly affected by how transfers are handled: in the transfer-state version, patients awaiting transfer out of a side room (T2, T4, T5) occupy it, while in the current version the transfer time is part of a longer stay in Xtest or Xtreat.
+2. **All outcomes**: the largest relative difference (transfer states minus current, as a share of the current value) and the largest absolute difference in counts per year, across the outcomes and settings, as convergence must hold for every outcome. Outcomes with a current value of 0 are left out of the relative difference.
+
+```{r}
+#| label: transfer-time-zero-check
+
+transfer_times <- c(0.5, 0.05, 0.005, 0.0005)   # days
+zero_check_grid <- e_cur$make_scenario_grid(compare_policies, c(0.5, 1), c(0.5, 1)) |>
+  filter(!(prop_I_suspected == 0.5 & test_sens == 1))
+
+# Final outcomes for every scenario in zero_check_grid under one version, at one transfer time
+run_with_transfer_time <- function(e, t_transfer) {
+  runs <- pmap(zero_check_grid, \(scenario, isolation_policy, prop_I_suspected, test_sens) {
+    parms <- suppressMessages(e$make_mod_parms(isolation_policy, prop_I_suspected, test_sens, scenario,
+                                               t_patient_transfer = t_transfer, fixed = e$fixed))
+    post <- e$run_scenario(parms) |>
+      e$add_quantities(time_step = run_settings$time_step, burn_in = run_settings$burn_in)
+    list(final        = e$make_final_outcomes(set_names(list(post), scenario),
+                                              mortI_mult      = parms$mortI / parms$mortS,
+                                              mortXtreat_mult = parms$mortXtreat / parms$mortS),
+         patient_days = e$calculate_total_patient_days(post) |> mutate(scenario = scenario, .before = 1))
+  })
+  e$make_grid_results(zero_check_grid,
+                      list(final        = bind_rows(map(runs, "final")),
+                           patient_days = bind_rows(map(runs, "patient_days")))) |>
+    e_cur$make_grid_outcomes_long(years = analysis_years)
+}
+
+zero_check <- map(transfer_times, \(tt) {
+  imap(models, \(e, v) run_with_transfer_time(e, tt) |> mutate(version = v)) |>
+    bind_rows() |>
+    mutate(t_patient_transfer = tt)
+}) |>
+  bind_rows() |>
+  select(t_patient_transfer, version, scenario, isolation_policy, outcome, value) |>
+  pivot_wider(names_from = version, values_from = value) |>
+  mutate(abs_diff = transfer - current,
+         rel_diff = if_else(abs(current) > 1e-9, abs_diff / abs(current), NA_real_),
+         fmt      = e_cur$grid_outcome_spec$fmt[match(outcome, e_cur$grid_outcome_spec$variable)])
+
+write_csv(zero_check, file.path(output_dir, "transfer_time_zero_check.csv"))
+
+fmt_tt <- \(x) format(x, scientific = FALSE, drop0trailing = TRUE)
+setting_label <- \(scenario) {
+  g <- zero_check_grid[match(scenario, zero_check_grid$scenario), ]
+  sprintf("%d%% / %d%%", round(100 * g$prop_I_suspected), round(100 * g$test_sens))
+}
+
+# 1. Side-room patient bed-days per year
+side_room_check <- zero_check |>
+  filter(outcome == "side_room_bed_days") |>
+  mutate(policy = policy_short[as.character(isolation_policy)], setting = setting_label(scenario)) |>
+  arrange(desc(t_patient_transfer), policy, setting)
+
+side_room_check |>
+  transmute(`Transfer time (days)` = fmt_tt(t_patient_transfer), Policy = policy,
+            `Coverage / sensitivity` = setting,
+            Current = comma(current, accuracy = 1), `Transfer states` = comma(transfer, accuracy = 1),
+            Difference = comma(abs_diff, accuracy = 0.1, style_positive = "plus"),
+            Relative = percent(rel_diff, accuracy = 0.001, style_positive = "plus")) |>
+  knitr::kable(caption = "Side-room patient bed-days per year under each version, by transfer time")
+
+# 2. All outcomes
+zero_summary <- zero_check |>
+  group_by(t_patient_transfer, policy = policy_short[as.character(isolation_policy)]) |>
+  summarise(max_rel_side   = max(abs(rel_diff[outcome == "side_room_bed_days"]), na.rm = TRUE),
+            max_rel_diff   = max(abs(rel_diff), na.rm = TRUE),
+            worst_outcome  = as.character(outcome)[which.max(abs(rel_diff))],
+            max_abs_diff_n = max(abs(abs_diff[fmt == "n"]), na.rm = TRUE),
+            .groups = "drop") |>
+  arrange(desc(t_patient_transfer), policy)
+
+zero_summary |>
+  transmute(`Transfer time (days)` = fmt_tt(t_patient_transfer),
+            Policy = policy,
+            `Side-room bed-days: largest relative difference` = percent(max_rel_side, accuracy = 0.001),
+            `All outcomes: largest relative difference` = percent(max_rel_diff, accuracy = 0.001),
+            `Outcome with the largest relative difference` =
+              e_cur$grid_outcome_spec$label[match(worst_outcome, e_cur$grid_outcome_spec$variable)],
+            `All outcomes: largest difference in counts per year` = sprintf("%.3f", max_abs_diff_n)) |>
+  knitr::kable(caption = "Largest difference between the two versions, by transfer time")
+
+smallest <- zero_summary |> filter(t_patient_transfer == min(transfer_times))
+converged <- all(smallest$max_rel_diff < 0.001)
+cat("At a transfer time of", min(transfer_times), "days, the largest relative difference is",
+    percent(max(smallest$max_rel_side), accuracy = 0.001), "in side-room bed-days and",
+    percent(max(smallest$max_rel_diff), accuracy = 0.001), "across all outcomes",
+    if (converged) "(below 0.1%): the two versions agree as transfer time approaches 0.\n"
+    else "(0.1% or more): the two versions do NOT converge; check the model code.\n")
+```
+
+## 4) P2 and P3 at the example settings
+
+The outcomes compared across the grid in the main model document, under P2 and P3, for the five example settings used there. The difference is transfer states minus current.
+
+```{r}
+#| label: examples
+#| results: asis
+
+example_settings <- tribble(
+  ~prop_I_suspected, ~test_sens,
+  0,   0,
+  0.5, 0.5,
+  1,   0.5,
+  0.5, 1,
+  1,   1
+)
+
+spec <- e_cur$grid_outcome_spec
+fmt_one <- function(x, fmt) case_when(
+  is.na(x)     ~ "-",
+  fmt == "pct" ~ percent(x, accuracy = 0.1),
+  fmt == "pp"  ~ paste0(sprintf("%+.2f", 100 * x), " pp"),
+  fmt == "rate"~ sprintf("%.2f", x),
+  TRUE         ~ comma(x, accuracy = 1))
+fmt_diff <- function(x, fmt) case_when(
+  is.na(x)     ~ "-",
+  fmt %in% c("pct", "pp") ~ sprintf("%+.2f pp", 100 * x),
+  fmt == "rate"~ sprintf("%+.2f", x),
+  TRUE         ~ comma(x, accuracy = 1, style_positive = "plus"))
+
+examples <- grid_long |>
+  filter(isolation_policy %in% compare_policies) |>
+  semi_join(example_settings, by = join_by(prop_I_suspected, test_sens)) |>
+  select(version, outcome, isolation_policy, prop_I_suspected, test_sens, value) |>
+  pivot_wider(names_from = version, values_from = value) |>
+  mutate(diff = transfer - current,
+         rel  = if_else(abs(current) > 1e-9, diff / abs(current), NA_real_),
+         fmt  = spec$fmt[match(outcome, spec$variable)],
+         label = spec$label[match(outcome, spec$variable)],
+         policy = policy_short[as.character(isolation_policy)],
+         setting = sprintf("Cov %d%% / sens %d%%", round(100 * prop_I_suspected), round(100 * test_sens)))
+
+write_csv(examples, file.path(output_dir, "example_comparison.csv"))
+
+for (pol in compare_policies) {
+  cat("\n\n### ", policy_short[pol], "\n\n", sep = "")
+  examples |>
+    filter(isolation_policy == pol) |>
+    mutate(Current = fmt_one(current, fmt), `Transfer states` = fmt_one(transfer, fmt),
+           Difference = fmt_diff(diff, fmt),
+           Relative = if_else(fmt == "n" & !is.na(rel), percent(rel, accuracy = 0.1, style_positive = "plus"), "")) |>
+    arrange(outcome, prop_I_suspected, test_sens) |>
+    select(Outcome = label, Setting = setting, Current, `Transfer states`, Difference, Relative) |>
+    knitr::kable(caption = paste0(policy_short[pol], " outcomes per year: current vs transfer-state version"),
+                 format = "pipe") |>
+    cat(sep = "\n")
+}
+```
+
+## 5) P2 and P3 across the grid
+
+Each outcome against test sensitivity, one line per testing coverage (0% to 100% in steps of 20%), for each version, and the difference (transfer states minus current). One tab per outcome, with P2 above P3.
+
+::: panel-tabset
+```{r}
+#| label: grid-plots
+#| fig-width: 10
+#| fig-height: 4.2
+#| results: asis
+
+cov_lines <- seq(0, 1, by = 0.2)
+diff_label <- "Difference (transfer states - current)"
+pol_long <- grid_long |>
+  filter(isolation_policy %in% compare_policies,
+         round(prop_I_suspected, 6) %in% round(cov_lines, 6)) |>
+  mutate(coverage = factor(percent(prop_I_suspected, accuracy = 1),
+                           levels = percent(cov_lines, accuracy = 1)))
+pol_diff <- pol_long |>
+  select(version, outcome, isolation_policy, coverage, test_sens, value) |>
+  pivot_wider(names_from = version, values_from = value) |>
+  mutate(version = diff_label, value = transfer - current)
+
+for (v in spec$variable) {
+  s <- spec[spec$variable == v, ]
+  cat("\n\n### ", s$label, "\n\n", sep = "")
+  for (pol in compare_policies) {
+    d <- bind_rows(pol_long |> filter(outcome == v, isolation_policy == pol) |>
+                     mutate(version = version_labels[as.character(version)]),
+                   pol_diff |> filter(outcome == v, isolation_policy == pol))
+    d$version <- factor(d$version, levels = c(version_labels, diff_label))
+    p <- ggplot(d, aes(test_sens, value, colour = coverage, group = coverage)) +
+      geom_hline(data = \(x) filter(x, version == diff_label), aes(yintercept = 0),
+                 colour = "grey50", linewidth = 0.3) +
+      geom_line(linewidth = 0.6) + geom_point(size = 0.7) +
+      facet_wrap(~ version, scales = "free_y") +
+      scale_colour_viridis_d("Proportion of CDI cases tested for CDI", end = 0.95, direction = -1,
+                             guide = guide_legend(nrow = 1)) +
+      scale_x_continuous("Test sensitivity", labels = percent) +
+      scale_y_continuous(NULL, labels = e_cur$fmt_labels(s$fmt)) +
+      labs(title = paste0(s$label, " (", policy_short[pol], ")")) +
+      theme_classic(base_size = 9) +
+      theme(legend.position = "bottom", strip.background = element_blank())
+    print(p)
+  }
+}
+```
+:::
+
+## 6) Does the change affect the policy comparisons?
+
+The main results compare policies, so what matters most is whether the differences between policies change. P1 is the same under both versions, so the change in P2 vs P1 and P3 vs P1 equals the change in P2 and P3 (section 5). The table puts the policy differences side by side at 100% testing coverage, under each version.
+
+```{r}
+#| label: policy-diff
+
+policy_diff <- grid_long |>
+  filter(round(prop_I_suspected, 6) == 1, round(test_sens, 6) %in% c(0.2, 0.5, 0.8, 1)) |>
+  select(version, outcome, isolation_policy, test_sens, value) |>
+  pivot_wider(names_from = isolation_policy, values_from = value) |>
+  transmute(version, outcome, test_sens,
+            `P2 - P1` = confirmed - none,
+            `P3 - P1` = suspected_and_confirmed - none,
+            `P3 - P2` = suspected_and_confirmed - confirmed) |>
+  pivot_longer(starts_with("P"), names_to = "comparison", values_to = "diff") |>
+  pivot_wider(names_from = version, values_from = diff) |>
+  mutate(fmt = spec$fmt[match(outcome, spec$variable)],
+         label = spec$label[match(outcome, spec$variable)])
+
+write_csv(policy_diff, file.path(output_dir, "policy_differences_both_versions.csv"))
+
+policy_diff |>
+  arrange(outcome, comparison, test_sens) |>
+  transmute(Outcome = label, Comparison = comparison, Sensitivity = percent(test_sens),
+            Current = fmt_diff(current, fmt),
+            `Transfer states` = fmt_diff(transfer, fmt)) |>
+  knitr::kable(caption = "Differences between policies per year at 100% testing coverage, under each version")
+```
+
+## 7) Why the results differ
+
+The mechanisms, at 100% testing coverage and 50% sensitivity under P2 and P3: rates, the share of results that are positive, patient-days in each state, colonisations by source and testing and case flows. Rows that don't apply to a version or policy are blank.
+
+```{r}
+#| label: mechanisms
+#| results: asis
+
+sel <- \(df, pol) df |> filter(isolation_policy == pol,
+                               round(prop_I_suspected, 6) == 1, round(test_sens, 6) == 0.5)
+
+compare_cols <- function(pol, cols, name) {
+  grid_results |> sel(pol) |>
+    select(version, any_of(cols)) |>
+    mutate(across(-version, \(x) x / analysis_years)) |>
+    pivot_longer(-version, names_to = name, values_to = "per_year") |>
+    pivot_wider(names_from = version, values_from = per_year) |>
+    mutate(diff = transfer - current)
+}
+
+src_cols <- c("cum_colonised_background", "cum_colonised_from_C", "cum_colonised_from_I",
+              "cum_colonised_from_Xtest", "cum_colonised_from_FN", "cum_colonised_from_Xtreat",
+              paste0("cum_colonised_from_T", 1:5), "cum_colonised_in_hospital")
+flow_cols <- c("cum_first_test", "cum_retest_false_negatives", "cum_false_negatives", "cum_confirmed_cases",
+               "cum_missed_untested_cases", "cum_missed_false_negative_cases", "cum_deaths_suspected_cases",
+               "cum_discharges_FN", "cum_deaths_confirmed_treated", "cum_deaths_confirmed_untreated",
+               "cum_discharges_while_infected", "cum_recovered_cases")
+pd_cols <- c(grep("_patient_days$", names(grid_results), value = TRUE),
+             "side_room_bed_days", "general_ward_bed_days")
+
+for (pol in compare_policies) {
+  cat("\n\n### ", policy_short[pol], "\n\n", sep = "")
+  rates <- imap(grid_runs, \(r, v) sel(r$parms, pol) |>
+                  mutate(version = v, positive_share = theta / (theta + pi)) |>
+                  select(version, any_of(c("gamma", "theta", "pi", "sigma", "delta", "tau", "positive_share")))) |>
+    bind_rows()
+  cat(knitr::kable(rates, digits = 4, format = "pipe",
+                   caption = "Rates (per day) and share of results positive, theta / (theta + pi)"), sep = "\n")
+  cat("\n\n")
+  pd <- compare_cols(pol, pd_cols, "measure") |>
+    filter(!(is.na(current) & (is.na(transfer) | transfer == 0)), !(current == 0 & transfer == 0) | is.na(current))
+  cat(knitr::kable(pd, digits = 0, format = "pipe",
+                   caption = "Patient-days per year by state and bed type"), sep = "\n")
+  cat("\n\n")
+  cat(knitr::kable(compare_cols(pol, src_cols, "source") |> filter(!(transfer == 0 & (is.na(current) | current == 0))),
+                   digits = 0, format = "pipe",
+                   caption = "Hospital-acquired colonisations per year by source"), sep = "\n")
+  cat("\n\n")
+  cat(knitr::kable(compare_cols(pol, flow_cols, "flow"), digits = 0, format = "pipe",
+                   caption = "Testing and case flows per year"), sep = "\n")
+}
+```
+
+## End of document

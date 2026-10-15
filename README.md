@@ -46,6 +46,33 @@ Total in-hospital living census is:
 
 $$N = S + C + I + Xtest + FN + Xtreat$$
 
+### Patient transfer states (test version)
+
+The transfer-state test version (`Scripts/Model1_ODE_Functions_T.R`,
+`Scripts/Model1_ODE_Parameters_T.R`, compared with the current model in
+`Model1_ODE_Transfer_Compare.qmd`) adds a state for each move between a
+general ward and a side room, instead of adding `t_patient_transfer` to
+the rate of the transition. Patients in a transfer state are still in
+their original bed, and leave it at rate
+`tau = 1 / t_patient_transfer`:
+
+- P2: `T1` (Xtest → T1 by `theta`, T1 → Xtreat by `tau`) and `T2`
+  (Xtreat → T2 by `delta`, T2 → S by `tau`)
+- P3: `T3` (I → T3 by `gamma` and FN → T3 by `sigma`, T3 → Xtest by
+  `tau`), `T4` (Xtest → T4 by `pi`, T4 → FN by `tau`) and `T5`
+  (Xtreat → T5 by `delta`, T5 → S by `tau`)
+
+| State | Location | Infectiousness | Discharge | Mortality | Force of colonisation (λ) |
+|----|----|----|----|----|----|
+| `T1` | General ward | `betaI` | None | `mortT1 = mortI` | Included |
+| `T2` | Isolation | 0 | None | `mortT2 = mortS` | Census N only |
+| `T3` | General ward | `betaI` | None | `mortT3 = mortI` | Included |
+| `T4` | Isolation | `betaI * beta_mult_isolated` | `1 / losFN` | `mortT4 = mortI` | Included |
+| `T5` | Isolation | 0 | None | `mortT5 = mortS` | Census N only |
+
+All transfer states count in the census N (the denominator of λ). T2 and T5 are non-infectious, so they have no transmission parameter and add nothing to the numerator. States
+not used by a policy stay empty, and P1 has no transfers.
+
 ------------------------------------------------------------------------
 
 ## Key transitions

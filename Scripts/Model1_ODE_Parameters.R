@@ -349,7 +349,9 @@ make_mod_parms <- function(
     isolation_policy,
     prop_I_suspected,
     test_sens,
-    scenario_label,
+    # scenario_label: optional name used in validation messages and saved with the parameters.
+    # The scenario grid supplies it automatically (e.g. "P2_confirmed_cov050_sens100").
+    scenario_label = NA_character_,
 
     # ---- Fixed parameters (NULL = use fixed list; supply a value to override) ----
     adm_rate               = NULL,
