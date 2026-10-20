@@ -75,7 +75,6 @@ validate_fixed_parameters <- function(adm_rate,
                                       losFN,
                                       losXtreat,
                                       t_patient_transfer,
-                                      t_identify_suspected,
                                       t_test_turnaround,
                                       t_wait_retest,
                                       prop_Xtreat_to_S,
@@ -91,8 +90,7 @@ validate_fixed_parameters <- function(adm_rate,
     stop("Progression/decolonisation times must be > 0.")
   if (losS <= 0 || losC <= 0 || losI <= 0 || losFN <= 0 || losXtreat <= 0)
     stop("All LOS parameters must be > 0.")
-  if (t_patient_transfer <= 0 || t_identify_suspected <= 0 || t_test_turnaround <= 0 ||
-      t_wait_retest <= 0)
+  if (t_patient_transfer <= 0 || t_test_turnaround <= 0 || t_wait_retest <= 0)
     stop("Time parameters must be > 0.")
   
   # ---- Must be >= 0 ----
@@ -148,12 +146,14 @@ validate_scenario_inputs <- function(isolation_policy,
          paste(isolation_levels, collapse = ", "), ".")
   }
   
-  # ---- Must be in [0,1] ----
+  # ---- Must be in [0,1) (gamma would be infinite at 1; see make_mod_parms()) ----
   if (!is.numeric(prop_I_suspected) ||
       length(prop_I_suspected) != 1 || is.na(prop_I_suspected) ||
-      prop_I_suspected < 0 || prop_I_suspected > 1) {
-    stop(nm, "prop_I_suspected must be a single numeric value in [0,1].")
+      prop_I_suspected < 0 || prop_I_suspected >= 1) {
+    stop(nm, "prop_I_suspected must be a single numeric value in [0,1).")
   }
+
+  # ---- Must be in [0,1] ----
   if (!is.numeric(test_sens) ||
       length(test_sens) != 1 || is.na(test_sens) ||
       test_sens < 0 || test_sens > 1) {
@@ -300,9 +300,6 @@ fixed <- list(
   # Patient transfer time (days)
   t_patient_transfer = 0.5,
   
-  # Time from symptom onset to case identification
-  t_identify_suspected = 2.0,
-
   # Time from test administration to result (days). Fixed across scenarios; scenarios vary
   # isolation_policy, prop_I_suspected and test_sens.
   t_test_turnaround = 2.0,
@@ -345,7 +342,6 @@ validate_fixed_parameters(
   losFN = fixed$losFN,
   losXtreat = fixed$losXtreat,
   t_patient_transfer = fixed$t_patient_transfer,
-  t_identify_suspected = fixed$t_identify_suspected,
   t_test_turnaround = fixed$t_test_turnaround,
   t_wait_retest = fixed$t_wait_retest,
   prop_Xtreat_to_S = fixed$prop_Xtreat_to_S,
@@ -389,7 +385,6 @@ make_mod_parms <- function(
     losFN                  = NULL,
     losXtreat              = NULL,
     t_patient_transfer     = NULL,
-    t_identify_suspected   = NULL,
     t_test_turnaround      = NULL,
     t_wait_retest          = NULL,
     prop_Xtreat_to_S       = NULL,
@@ -427,7 +422,6 @@ make_mod_parms <- function(
   if (is.null(losFN))                  losFN                  <- fixed$losFN
   if (is.null(losXtreat))              losXtreat              <- fixed$losXtreat
   if (is.null(t_patient_transfer))     t_patient_transfer     <- fixed$t_patient_transfer
-  if (is.null(t_identify_suspected))   t_identify_suspected   <- fixed$t_identify_suspected
   if (is.null(t_test_turnaround))      t_test_turnaround      <- fixed$t_test_turnaround
   if (is.null(t_wait_retest))          t_wait_retest          <- fixed$t_wait_retest
   if (is.null(prop_Xtreat_to_S))       prop_Xtreat_to_S       <- fixed$prop_Xtreat_to_S
@@ -457,7 +451,6 @@ make_mod_parms <- function(
     losFN = losFN,
     losXtreat = losXtreat,
     t_patient_transfer = t_patient_transfer,
-    t_identify_suspected = t_identify_suspected,
     t_test_turnaround = t_test_turnaround,
     t_wait_retest = t_wait_retest,
     prop_Xtreat_to_S = prop_Xtreat_to_S,
@@ -588,15 +581,19 @@ make_mod_parms <- function(
 
   # Rate of identification of suspected cases (I -> Xtest, or I -> T3 under P3)
 
-  # Calculated as the proportion of I that are suspected divided by the mean time to identification.
-  # Note: gamma competes with discharge and death from I, so the share of infected patients who
-  # are actually identified and tested is gamma / (gamma + disI + mortI), lower than prop_I_suspected
-  # (e.g. about 88% at prop_I_suspected = 1 and 78% at 0.5, under every policy).
+  # prop_I_suspected is the proportion of CDI cases sent for testing: the share of patients entering
+  # I who are identified as suspected cases before they are discharged or die. Identification
+  # competes with discharge and death from I, so prop_I_suspected = gamma / (gamma + disI + mortI),
+  # which gives gamma = prop_I_suspected * (disI + mortI) / (1 - prop_I_suspected). gamma is infinite
+  # at prop_I_suspected = 1, so it must be < 1. The baseline value is set from the "ever tested"
+  # share of hospital-onset diarrhoea patients in Mawer et al. (2019, doi 10.1016/j.jhin.2019.05.001).
+  # A consequence is that the mean time in I before identification, 1 / (gamma + disI + mortI), is
+  # longer at lower coverage (about 9 days at 33% and 7 days at 50%, with the default parameters).
   # TRANSFER STATE VERSION: transfer time is never added to gamma, theta, pi or sigma; under P3
   # identified (I) and retested (FN) patients pass through T3, and false negatives through T4. The
   # share of results that are positive, theta / (theta + pi), therefore equals test_sens under
   # every policy.
-  gamma <- prop_I_suspected / t_identify_suspected
+  gamma <- prop_I_suspected * (disI + mortI) / (1 - prop_I_suspected)
 
   # Rate of confirmation of true positives (Xtest -> Xtreat, or Xtest -> T1 under P2)
   theta <- test_sens / t_test_turnaround

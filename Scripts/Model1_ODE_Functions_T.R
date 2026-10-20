@@ -13,9 +13,10 @@
 # source plot. Grid functions and the other plot and summary functions are unchanged.
 #
 # How the transfer states enter the outcomes:
-#   - Tests are counted when a patient is identified (I -> T3) or due a retest (FN -> T3), i.e. when
-#     the specimen is taken, so deaths in T3 are deaths awaiting a result (suspected cases), not
-#     missed cases.
+#   - The specimen is taken on entry to Xtest, so under P3 tests are counted on leaving T3 (T3 ->
+#     Xtest), split into first tests and retests by the share of T3 from I and FN. Deaths in T3 are
+#     missed cases (untested if from I, false negatives if from FN), and are also counted in
+#     deaths_suspected_cases.
 #   - T4 patients are false negatives: their discharges and deaths count as missed false negative
 #     cases and are added to discharges_FN / deaths_FN.
 #   - T2 and T5 patients have recovered: their deaths (at the baseline rate) are not CDI deaths.
@@ -240,7 +241,25 @@ Model1A_ODE <- function(time, state, parms) {
       side_room_T_occupancy
     
     general_ward_bed_occupancy <- hospital_bed_occupancy - side_room_bed_occupancy
-    
+
+    # Current CDI cases and those ever tested (for comparison with point-prevalence studies)
+
+    # Current CDI cases are all patients with untreated or treated CDI: I, Xtest, FN, Xtreat and
+    # T1, T3 and T4 (T2 and T5 have recovered). The specimen is taken on entry to Xtest, so those
+    # ever tested are Xtest, FN, Xtreat, T1 and T4, plus the patients in T3 (awaiting a side room
+    # under P3) who came from FN; those in T3 who came from I have not yet been tested. T3 is not
+    # split by origin, so the share from FN is estimated from the current inflows to T3, which is
+    # exact at steady state as both origins leave T3 at the same rate.
+    T3_inflow_I  <- gamma * I
+    T3_inflow_FN <- sigma * FN
+    T3_from_FN   <- if (T3_inflow_I + T3_inflow_FN > 0) {
+      T3 * T3_inflow_FN / (T3_inflow_I + T3_inflow_FN)
+    } else {
+      0
+    }
+    CDI_census        <- I + Xtest + FN + Xtreat + T1 + T3 + T4
+    CDI_tested_census <- Xtest + FN + Xtreat + T1 + T4 + T3_from_FN
+
     # h) Flows (instantaneous rates per day) ####
     
     # These are rates per day, evaluated at each ODE time step (half-day).
@@ -281,18 +300,23 @@ Model1A_ODE <- function(time, state, parms) {
     recovered_cases_rate <- (delta * Xtreat) + (disXtreat * Xtreat)
     
     # Testing
-    first_test_rate <- gamma * I
-    retest_false_negatives_rate <- sigma * FN
+    # The specimen is taken on entry to Xtest. Under P3 patients first wait in T3, so tests are
+    # counted on leaving T3 (tau * T3), split between first tests and retests by the share of T3
+    # from I and FN (see T3_from_FN above).
+    first_test_rate <- (1 - via_T3) * gamma * I + tau * (T3 - T3_from_FN)
+    retest_false_negatives_rate <- (1 - via_T3) * sigma * FN + tau * T3_from_FN
     total_test_rate <- first_test_rate + retest_false_negatives_rate
     false_negatives_rate <- pi * Xtest
-    
+
     # Missed cases
-    # Missed untested cases are those that leave the I state without being tested, either through 
-    # discharge or death
-    missed_untested_cases_rate <- (disI + mortI) * I
+    # Missed untested cases are those that leave I, or T3 before their first test (P3), without
+    # being tested, through discharge or death (no discharges from T3)
+    missed_untested_cases_rate <- (disI + mortI) * I + mortT3 * (T3 - T3_from_FN)
     # Missed false negative cases are those that leave the FN state (or T4, awaiting transfer back to
-    # the ward) without being retested, either through discharge or death
-    missed_false_negative_cases_rate <- (disFN + mortFN) * FN + (disT4 + mortT4) * T4
+    # the ward, or T3, awaiting a side room for a retest) without being retested, through discharge
+    # or death
+    missed_false_negative_cases_rate <- (disFN + mortFN) * FN + (disT4 + mortT4) * T4 +
+      mortT3 * T3_from_FN
     total_missed_cases_rate <- missed_untested_cases_rate + missed_false_negative_cases_rate
     
     # Discharges
@@ -349,7 +373,11 @@ Model1A_ODE <- function(time, state, parms) {
         side_room_Xtreat_occupancy = side_room_Xtreat_occupancy,
         side_room_T_occupancy = side_room_T_occupancy,
         general_ward_bed_occupancy = general_ward_bed_occupancy,
-        
+
+        # Current CDI cases and those ever tested
+        CDI_census        = CDI_census,
+        CDI_tested_census = CDI_tested_census,
+
         # Admissions
         admitted_susceptible_rate = admitted_susceptible_rate,
         admitted_colonised_rate = admitted_colonised_rate,
@@ -475,6 +503,8 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       side_room_Xtreat_bed_days = side_room_Xtreat_occupancy * step_width,
       side_room_T_bed_days      = side_room_T_occupancy * step_width,
       hospital_bed_days     = hospital_bed_occupancy * step_width,
+      CDI_days        = CDI_census * step_width,
+      CDI_tested_days = CDI_tested_census * step_width,
 
       # Per-step flows
       
@@ -636,7 +666,9 @@ calculate_total_patient_days <- function(df) {
             side_room_Xtest_bed_days  = sum(side_room_Xtest_bed_days, na.rm = TRUE),
             side_room_Xtreat_bed_days = sum(side_room_Xtreat_bed_days, na.rm = TRUE),
             side_room_T_bed_days      = sum(side_room_T_bed_days, na.rm = TRUE),
-            hospital_bed_days     = sum(hospital_bed_days, na.rm = TRUE)
+            hospital_bed_days     = sum(hospital_bed_days, na.rm = TRUE),
+            CDI_patient_days        = sum(CDI_days, na.rm = TRUE),
+            CDI_tested_patient_days = sum(CDI_tested_days, na.rm = TRUE)
   )
 }
 
@@ -1114,14 +1146,23 @@ make_final_outcomes <- function(scenario_post,
 # Adds derived outcomes (proportions, prevalence differences and specimens per confirmed case) to a
 # data frame of final outcomes joined to patient-days. Used by the research question outcomes table
 # and for the outcomes compared across the scenario grid.
-#   prop_confirmed            - confirmed / incident CDI cases (1c)
-#   prop_confirmed_via_retest - confirmed via retest (estimated) / incident CDI cases (1d)
+#   prop_confirmed            - confirmed / incident CDI cases (1d)
+#   prop_confirmed_via_retest - confirmed via retest (estimated) / incident CDI cases (1e)
 #   diff_prev_C, diff_prev_CDI - colonisation and CDI prevalence at discharge minus at admission (2b)
 #   tests_per_confirmed       - faecal specimens tested per confirmed case (3f; NA if none confirmed)
+#   prop_sent_for_testing     - suspected cases (identified, leaving I) / incident CDI cases: the
+#                               share of CDI cases sent for testing (equals prop_I_suspected at
+#                               steady state; under P3 a few die in T3 before their first test)
+#   prop_current_CDI_tested   - share of current CDI cases who have ever been tested, averaged over
+#                               the analysis period (CDI patient-days in tested states / all CDI
+#                               patient-days): the model equivalent of a point-prevalence survey such
+#                               as Mawer et al. (2019)
 add_derived_outcomes <- function(df) {
   safe_div <- function(num, den) ifelse(den > 0, num / den, NA_real_)
   df |>
     mutate(
+      prop_sent_for_testing     = safe_div(cum_suspected_cases,           cum_total_infected_incidence),
+      prop_current_CDI_tested   = safe_div(CDI_tested_patient_days,       CDI_patient_days),
       prop_confirmed            = safe_div(cum_confirmed_cases,           cum_total_infected_incidence),
       prop_missed               = safe_div(cum_total_missed_cases,        cum_total_infected_incidence),
       prop_confirmed_via_retest = safe_div(cum_confirmed_via_retest,      cum_total_infected_incidence),
@@ -1140,10 +1181,10 @@ add_derived_outcomes <- function(df) {
 # (numbered as in the research questions, 1a-4d), followed by the inputs for incremental
 # cost-effectiveness ratios (ICERs), one row per outcome and one column per scenario.
 #
-# Proportions of incident CDI cases (1c, 1d) do not sum to 1 with missed cases (1b): the gap is
+# Proportions of incident CDI cases (1d, 1e) do not sum to 1 with missed cases (1b): the gap is
 # deaths while awaiting a test result (tested, but neither confirmed nor missed). Prevalence
 # differences (2b) are discharge minus admission prevalence, in percentage points; a positive value
-# means the hospital is a net source. Estimated outcomes (1d, 2a) are apportioned from shares of
+# means the hospital is a net source. Estimated outcomes (1e, 2a) are apportioned from shares of
 # patient flows (see make_final_outcomes()).
 #
 # per_year = TRUE labels counts "(n per year)": use it when the count and patient-day columns have
@@ -1156,7 +1197,7 @@ make_research_outcomes_table <- function(final_outcomes, patient_days_summary, p
   fo <- final_outcomes |>
     left_join(
       patient_days_summary |> select(scenario, hospital_bed_days, general_ward_bed_days,
-                                    side_room_bed_days),
+                                    side_room_bed_days, CDI_patient_days, CDI_tested_patient_days),
       by = "scenario"
     ) |>
     add_derived_outcomes() |>
@@ -1170,10 +1211,12 @@ make_research_outcomes_table <- function(final_outcomes, patient_days_summary, p
 
     "1) Case ascertainment",       "1a) Incident CDI cases (n)",                                              "cum_total_infected_incidence",  "n",
     "1) Case ascertainment",       "1b) Missed CDI cases (n)",                                                "cum_total_missed_cases",        "n",
-    "1) Case ascertainment",       "1c) CDI cases confirmed (n)",                                             "cum_confirmed_cases",           "n",
-    "1) Case ascertainment",       "1c) CDI cases confirmed (% of incident CDI cases)",                       "prop_confirmed",                "pct",
-    "1) Case ascertainment",       "1d) CDI cases confirmed via retest, estimated (n)",                       "cum_confirmed_via_retest",      "n",
-    "1) Case ascertainment",       "1d) CDI cases confirmed via retest, estimated (% of incident CDI cases)", "prop_confirmed_via_retest",     "pct",
+    "1) Case ascertainment",       "1c) CDI cases ever tested, point prevalence (%) at model stabilisation",  "prop_current_CDI_tested",       "pct",
+    "1) Case ascertainment",       "CDI cases sent for testing (% of incident CDI cases)",                    "prop_sent_for_testing",         "pct",
+    "1) Case ascertainment",       "1d) CDI cases confirmed (n)",                                            "cum_confirmed_cases",           "n",
+    "1) Case ascertainment",       "1d) CDI cases confirmed (% of incident CDI cases)",                       "prop_confirmed",                "pct",
+    "1) Case ascertainment",       "1e) CDI cases confirmed via retest, estimated (n)",                       "cum_confirmed_via_retest",      "n",
+    "1) Case ascertainment",       "1e) CDI cases confirmed via retest, estimated (% of incident CDI cases)", "prop_confirmed_via_retest",     "pct",
 
     "2) Transmission",             "2a) Hospital-acquired CDI cases, estimated (n)",                          "cum_hospital_attributable_I",   "n",
     "2) Transmission",             "2b) Colonisation prevalence at admission (%)",                            "prop_admitted_C",               "pct",
@@ -2123,7 +2166,10 @@ make_grid_results <- function(grid, grid_runs) {
 # and 14 of the QMD), numbered as in the research questions. Counts (fmt "n") are shown as annual
 # totals (mean per year of the analysis period after the burn-in). Definitions:
 #   - CDI cases: all incident cases, admitted with CDI plus hospital-onset.
-#   - Missed CDI cases: exits from I and FN by discharge or death (never diagnosed).
+#   - Missed CDI cases: exits from I and FN (and T3 and T4 under P3) by discharge or death (never
+#     diagnosed).
+#   - CDI cases ever tested (1c): share of current CDI cases who have ever been tested, as a point
+#     prevalence (see add_derived_outcomes()); plotted in section 13 only (gain = FALSE).
 #   - Confirmed via retest and hospital-acquired CDI are estimated from shares of patient flows (see
 #     make_final_outcomes()).
 #   - Differences in total CDI cases between scenarios equal the differences in hospital-acquired
@@ -2137,8 +2183,9 @@ grid_outcome_spec <- tribble(
   ~variable,                       ~label,                                                                  ~fmt,   ~plot, ~gain,
   "cum_total_infected_incidence",  "1a) Incident CDI cases",                                                "n",    TRUE,  TRUE,
   "cum_total_missed_cases",        "1b) Missed CDI cases",                                                  "n",    TRUE,  TRUE,
-  "prop_confirmed",                "1c) Proportion of CDI cases confirmed",                                 "pct",  TRUE,  TRUE,
-  "prop_confirmed_via_retest",     "1d) Proportion of CDI cases confirmed via retest (estimated)",          "pct",  TRUE,  TRUE,
+  "prop_current_CDI_tested",       "1c) CDI cases ever tested, point prevalence at model stabilisation",    "pct",  TRUE,  FALSE,
+  "prop_confirmed",                "1d) Proportion of CDI cases confirmed",                                 "pct",  TRUE,  TRUE,
+  "prop_confirmed_via_retest",     "1e) Proportion of CDI cases confirmed via retest (estimated)",          "pct",  TRUE,  TRUE,
   "cum_hospital_attributable_I",   "2a) Hospital-acquired CDI cases (estimated)",                           "n",    TRUE,  TRUE,
   "diff_prev_C",                   "2b) Difference in colonisation prevalence, discharge vs admission",     "pp",   TRUE,  TRUE,
   "diff_prev_CDI",                 "2b) Difference in CDI prevalence, discharge vs admission",              "pp",   TRUE,  TRUE,
@@ -2204,13 +2251,14 @@ grid_theme <- theme_classic(base_size = grid_font_size) +
 
 # Axis/legend label for prop_I_suspected ("testing coverage"). The model uses this proportion to
 # calculate the case identification rate gamma (see make_mod_parms()).
-coverage_axis_label         <- "Proportion of CDI cases tested for CDI"
-coverage_axis_label_wrapped <- "Proportion of CDI cases\ntested for CDI"
+coverage_axis_label         <- "Proportion of CDI cases sent for testing"
+coverage_axis_label_wrapped <- "Proportion of CDI cases\nsent for testing"
 
-# Testing coverage values drawn as lines on the line plots (a subset of the grid, for legibility)
-grid_line_coverage <- seq(0, 100, by = 20) / 100
+# Testing coverage values drawn as lines on the line plots (a subset of the grid, for legibility).
+# Coverage must be below 100% (see make_mod_parms()), so the highest value is 99%.
+grid_line_coverage <- c(seq(0, 80, by = 20), 99) / 100
 
-# Categorical colour scale for coverage on the line plots: 0% yellow to 100% purple
+# Categorical colour scale for coverage on the line plots: 0% yellow to 99% purple
 grid_coverage_colour <- scale_colour_viridis_d(
   coverage_axis_label,
   end       = 0.95,
@@ -2377,7 +2425,7 @@ plot_grid_heatmaps_with_diffs <- function(grid_long, grid_diffs, outcome_var,
 #                             better test), used for side-room bed-days, which rise as more cases are
 #                             confirmed and isolated
 #   direction = "change":     value at sens_to minus value at sens_from, used for the proportions of
-#                             cases confirmed (1c, 1d), in percentage points
+#                             cases confirmed (1d, 1e), in percentage points
 # Counts (fmt "n") are per year.
 sensitivity_gain_spec <- grid_outcome_spec |>
   mutate(
@@ -2389,8 +2437,8 @@ sensitivity_gain_spec <- grid_outcome_spec |>
     title = case_when(
       variable == "cum_total_infected_incidence" ~ "1a) Incident CDI cases avoided",
       variable == "cum_total_missed_cases"       ~ "1b) Missed CDI cases avoided",
-      variable == "prop_confirmed"               ~ "1c) Change in the proportion of CDI cases confirmed",
-      variable == "prop_confirmed_via_retest"    ~ "1d) Change in the proportion of CDI cases confirmed via retest (estimated)",
+      variable == "prop_confirmed"               ~ "1d) Change in the proportion of CDI cases confirmed",
+      variable == "prop_confirmed_via_retest"    ~ "1e) Change in the proportion of CDI cases confirmed via retest (estimated)",
       variable == "cum_hospital_attributable_I"  ~ "2a) Hospital-acquired CDI cases avoided (estimated)",
       variable == "diff_prev_C"                  ~ "2b) Reduction in the difference in colonisation prevalence, discharge vs admission",
       variable == "diff_prev_CDI"                ~ "2b) Reduction in the difference in CDI prevalence, discharge vs admission",
