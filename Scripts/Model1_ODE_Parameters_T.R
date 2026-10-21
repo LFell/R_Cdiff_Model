@@ -17,8 +17,8 @@
 
 # 1) Introduction ####
 # This script defines the parameters for the ODE model of hospital transmission of a pathogen
-# with a focus on the impact of isolation policy, identification of suspected cases (testing
-# coverage) and test/algorithm sensitivity on outcomes. Test turnaround time is a fixed parameter.
+# with a focus on the impact of isolation policy, identification of suspected cases (the
+# proportion of CDI cases sent for testing) and test/algorithm sensitivity on outcomes. Test turnaround time is a fixed parameter.
 #
 # The script is called by Model1_ODE_Model_Run_T.qmd and Model1_ODE_Transfer_Compare.qmd to create a
 # list of parameters for each scenario.
@@ -128,7 +128,7 @@ validate_fixed_parameters <- function(adm_rate,
 
 ## d) Function to validate scenario control parameters ####
 validate_scenario_inputs <- function(isolation_policy,
-                                     prop_I_suspected,
+                                     prop_I_sent_for_testing,
                                      test_sens,
                                      scenario_label = NA_character_,
                                      verbose = TRUE) {
@@ -147,10 +147,10 @@ validate_scenario_inputs <- function(isolation_policy,
   }
   
   # ---- Must be in [0,1) (gamma would be infinite at 1; see make_mod_parms()) ----
-  if (!is.numeric(prop_I_suspected) ||
-      length(prop_I_suspected) != 1 || is.na(prop_I_suspected) ||
-      prop_I_suspected < 0 || prop_I_suspected >= 1) {
-    stop(nm, "prop_I_suspected must be a single numeric value in [0,1).")
+  if (!is.numeric(prop_I_sent_for_testing) ||
+      length(prop_I_sent_for_testing) != 1 || is.na(prop_I_sent_for_testing) ||
+      prop_I_sent_for_testing < 0 || prop_I_sent_for_testing >= 1) {
+    stop(nm, "prop_I_sent_for_testing must be a single numeric value in [0,1).")
   }
 
   # ---- Must be in [0,1] ----
@@ -301,7 +301,7 @@ fixed <- list(
   t_patient_transfer = 0.5,
   
   # Time from test administration to result (days). Fixed across scenarios; scenarios vary
-  # isolation_policy, prop_I_suspected and test_sens.
+  # isolation_policy, prop_I_sent_for_testing and test_sens.
   t_test_turnaround = 2.0,
 
   # Time from FN result to retest
@@ -358,10 +358,10 @@ make_mod_parms <- function(
     # ---- Scenario-specific parameters (must always be supplied) ----
     # isolation_policy: "none", "confirmed" or "suspected_and_confirmed"
     isolation_policy,
-    prop_I_suspected,
+    prop_I_sent_for_testing,
     test_sens,
     # scenario_label: optional name used in validation messages and saved with the parameters.
-    # The scenario grid supplies it automatically (e.g. "P2_confirmed_cov050_sens100").
+    # The scenario grid supplies it automatically (e.g. "P2_confirmed_test050_sens100").
     scenario_label = NA_character_,
 
     # ---- Fixed parameters (NULL = use fixed list; supply a value to override) ----
@@ -462,7 +462,7 @@ make_mod_parms <- function(
   # c) Validate scenario-specific parameters ####
   validate_scenario_inputs(
     isolation_policy    = isolation_policy,
-    prop_I_suspected    = prop_I_suspected,
+    prop_I_sent_for_testing    = prop_I_sent_for_testing,
     test_sens           = test_sens,
     scenario_label      = scenario_label
   )
@@ -581,19 +581,19 @@ make_mod_parms <- function(
 
   # Rate of identification of suspected cases (I -> Xtest, or I -> T3 under P3)
 
-  # prop_I_suspected is the proportion of CDI cases sent for testing: the share of patients entering
+  # prop_I_sent_for_testing is the proportion of CDI cases sent for testing: the share of patients entering
   # I who are identified as suspected cases before they are discharged or die. Identification
-  # competes with discharge and death from I, so prop_I_suspected = gamma / (gamma + disI + mortI),
-  # which gives gamma = prop_I_suspected * (disI + mortI) / (1 - prop_I_suspected). gamma is infinite
-  # at prop_I_suspected = 1, so it must be < 1. The baseline value is set from the "ever tested"
+  # competes with discharge and death from I, so prop_I_sent_for_testing = gamma / (gamma + disI + mortI),
+  # which gives gamma = prop_I_sent_for_testing * (disI + mortI) / (1 - prop_I_sent_for_testing). gamma is infinite
+  # at prop_I_sent_for_testing = 1, so it must be < 1. The baseline value is set from the "ever tested"
   # share of hospital-onset diarrhoea patients in Mawer et al. (2019, doi 10.1016/j.jhin.2019.05.001).
   # A consequence is that the mean time in I before identification, 1 / (gamma + disI + mortI), is
-  # longer at lower coverage (about 9 days at 33% and 7 days at 50%, with the default parameters).
+  # longer when fewer are sent for testing (about 9 days at 33% and 7 days at 50%, with the default parameters).
   # TRANSFER STATE VERSION: transfer time is never added to gamma, theta, pi or sigma; under P3
   # identified (I) and retested (FN) patients pass through T3, and false negatives through T4. The
   # share of results that are positive, theta / (theta + pi), therefore equals test_sens under
   # every policy.
-  gamma <- prop_I_suspected * (disI + mortI) / (1 - prop_I_suspected)
+  gamma <- prop_I_sent_for_testing * (disI + mortI) / (1 - prop_I_sent_for_testing)
 
   # Rate of confirmation of true positives (Xtest -> Xtreat, or Xtest -> T1 under P2)
   theta <- test_sens / t_test_turnaround
@@ -632,7 +632,7 @@ make_mod_parms <- function(
     # Scenario controls
     scenario_label       = scenario_label,
     isolation_policy     = isolation_policy,
-    prop_I_suspected     = prop_I_suspected,
+    prop_I_sent_for_testing     = prop_I_sent_for_testing,
     test_sens            = test_sens,
 
     # Fixed test turnaround time (reported for reference; enters the model via theta and pi)

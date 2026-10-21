@@ -1151,7 +1151,7 @@ make_final_outcomes <- function(scenario_post,
 #   diff_prev_C, diff_prev_CDI - colonisation and CDI prevalence at discharge minus at admission (2b)
 #   tests_per_confirmed       - faecal specimens tested per confirmed case (3f; NA if none confirmed)
 #   prop_sent_for_testing     - suspected cases (identified, leaving I) / incident CDI cases: the
-#                               share of CDI cases sent for testing (equals prop_I_suspected at
+#                               share of CDI cases sent for testing (equals prop_I_sent_for_testing at
 #                               steady state; under P3 a few die in T3 before their first test)
 #   prop_current_CDI_tested   - share of current CDI cases who have ever been tested, averaged over
 #                               the analysis period (CDI patient-days in tested states / all CDI
@@ -1282,13 +1282,13 @@ make_research_outcomes_table <- function(final_outcomes, patient_days_summary, p
 
 # Takes the final_outcomes tibble and returns absolute differences (scenario minus base) vs a
 # chosen base scenario for all numeric columns. base_scenario is a scenario label and must be
-# supplied, e.g. "P1_none_cov050_sens050".
+# supplied, e.g. "P1_none_test050_sens050".
 #
 # Column names are prefixed with "d_" and suffixed with "_vs_{base_scenario}".
 # The "final_" and "cum_" prefixes are stripped for brevity, e.g. with
-# base_scenario = "P1_none_cov050_sens050":
-#   final_S             -> d_S_vs_P1_none_cov050_sens050
-#   cum_confirmed_cases -> d_confirmed_cases_vs_P1_none_cov050_sens050
+# base_scenario = "P1_none_test050_sens050":
+#   final_S             -> d_S_vs_P1_none_test050_sens050
+#   cum_confirmed_cases -> d_confirmed_cases_vs_P1_none_test050_sens050
 # Section 11 of the QMD then renames the suffix to the comparison, e.g. "_P2_vs_P1".
 
 make_final_outcomes_vs_base <- function(final_outcomes, base_scenario) {
@@ -1816,7 +1816,7 @@ plot_case_ascertainment_line <- function(plot_long_flows,
 
 ## j) Faecal specimens tested per year: first tests and retests - stacked bar plot ####
 
-# Stacked bar plots (sections j, m, n, s, u) show the example scenarios grouped by coverage and
+# Stacked bar plots (sections j, m, n, s, u) show the example scenarios grouped by proportion of CDI cases sent for testing and
 # sensitivity, with P1, P2 and P3 side by side (see plot_example_stacked() in section 10).
 plot_testing_bar <- function(final_outcomes) {
   plot_example_stacked(final_outcomes,
@@ -2010,7 +2010,7 @@ plot_colonisation_sources_bar <- function(final_outcomes, colour_palette = model
 plot_scenario_params <- function(control_parms) {
   control_parms |>
     mutate(isolation_policy = factor(isolation_policy, levels = isolation_policy_levels)) |>
-    ggplot(aes(test_sens, prop_I_suspected)) +
+    ggplot(aes(test_sens, prop_I_sent_for_testing)) +
     geom_point() +
     geom_text(aes(label = scenario), vjust = -0.7, size = font_base_size / .pt) +
     facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels), axes = "all_y") +
@@ -2021,7 +2021,7 @@ plot_scenario_params <- function(control_parms) {
     labs(
       title = "Values of control parameters",
       x     = "Test sensitivity",
-      y     = coverage_axis_label_wrapped
+      y     = sent_axis_label_wrapped
     )
 }
 
@@ -2029,7 +2029,7 @@ plot_scenario_params <- function(control_parms) {
 
 # 10) Scenario grid ####
 
-# The scenario grid crosses every isolation policy with every testing coverage (prop_I_suspected)
+# The scenario grid crosses every isolation policy with every proportion of CDI cases sent for testing (prop_I_sent_for_testing)
 # and test sensitivity value. Outcomes are totals over the analysis period after the burn-in, shown
 # in the QMD as annual totals.
 
@@ -2055,7 +2055,7 @@ isolation_policy_codes <- c(
 # Reference policy (P1, no isolation)
 reference_policy <- "none"
 
-# Policy comparisons: difference = policy minus comparator, at the same testing coverage and test
+# Policy comparisons: difference = policy minus comparator, at the same proportion sent for testing and test
 # sensitivity (negative = less of the outcome than under the comparator). P2 and P3 are compared
 # with P1 (no isolation), and P3 with P2 (the incremental effect of also isolating suspected cases).
 policy_comparisons <- tribble(
@@ -2069,21 +2069,21 @@ policy_comparisons <- tribble(
 
 ## b) Build the scenario grid ####
 
-# Returns one row per combination, with a scenario label such as "P2_confirmed_cov050_sens100".
-make_scenario_grid <- function(isolation_policy, prop_I_suspected, test_sens) {
+# Returns one row per combination, with a scenario label such as "P2_confirmed_test050_sens100".
+make_scenario_grid <- function(isolation_policy, prop_I_sent_for_testing, test_sens) {
   bad <- setdiff(isolation_policy, isolation_policy_levels)
   if (length(bad) > 0) {
     stop("Unknown isolation_policy value(s): ", paste(bad, collapse = ", "), ".")
   }
   expand_grid(
     isolation_policy = isolation_policy,
-    prop_I_suspected = prop_I_suspected,
+    prop_I_sent_for_testing = prop_I_sent_for_testing,
     test_sens        = test_sens
   ) |>
     mutate(
-      scenario = sprintf("%s_cov%03d_sens%03d",
+      scenario = sprintf("%s_test%03d_sens%03d",
                          isolation_policy_codes[isolation_policy],
-                         round(100 * prop_I_suspected),
+                         round(100 * prop_I_sent_for_testing),
                          round(100 * test_sens)),
       .before = 1
     )
@@ -2105,10 +2105,10 @@ make_scenario_grid <- function(isolation_policy, prop_I_suspected, test_sens) {
 #
 # Returns a list of combined tibbles: parms, final, patient_days, stability, negatives.
 run_scenario_grid <- function(grid, time_step, burn_in = 0, n_cores = 1) {
-  run_one <- function(scenario, isolation_policy, prop_I_suspected, test_sens) {
+  run_one <- function(scenario, isolation_policy, prop_I_sent_for_testing, test_sens) {
     parms <- suppressMessages(make_mod_parms(
       isolation_policy = isolation_policy,
-      prop_I_suspected = prop_I_suspected,
+      prop_I_sent_for_testing = prop_I_sent_for_testing,
       test_sens        = test_sens,
       scenario_label   = scenario
     ))
@@ -2162,7 +2162,7 @@ make_grid_results <- function(grid, grid_runs) {
 
 ## e) Outcomes compared across the grid ####
 
-# The research question outcomes compared across testing coverage and test sensitivity (sections 13
+# The research question outcomes compared across the proportion of CDI cases sent for testing and test sensitivity (sections 13
 # and 14 of the QMD), numbered as in the research questions. Counts (fmt "n") are shown as annual
 # totals (mean per year of the analysis period after the burn-in). Definitions:
 #   - CDI cases: all incident cases, admitted with CDI plus hospital-onset.
@@ -2177,7 +2177,7 @@ make_grid_results <- function(grid, grid_runs) {
 #     the same in every scenario.
 # fmt sets how values are labelled: "n" (counts), "rate" (one decimal place), "pct" (percent) or
 # "pp" (percentage points).
-# plot = TRUE: plotted in the QMD's tabs of outcomes by testing coverage and test sensitivity.
+# plot = TRUE: plotted in the QMD's tabs of outcomes by proportion sent for testing and test sensitivity.
 # gain = TRUE: reported in the QMD's change in outcomes due to increasing test sensitivity.
 grid_outcome_spec <- tribble(
   ~variable,                       ~label,                                                                  ~fmt,   ~plot, ~gain,
@@ -2211,7 +2211,7 @@ fmt_axis_label <- function(fmt) {
 # the analysis period) to give annual totals; proportions and ratios are unchanged.
 make_grid_outcomes_long <- function(grid_results, spec = grid_outcome_spec, years = 1) {
   grid_results |>
-    select(scenario, isolation_policy, prop_I_suspected, test_sens, all_of(spec$variable)) |>
+    select(scenario, isolation_policy, prop_I_sent_for_testing, test_sens, all_of(spec$variable)) |>
     pivot_longer(all_of(spec$variable), names_to = "outcome", values_to = "value") |>
     mutate(
       value            = if_else(spec$fmt[match(outcome, spec$variable)] == "n", value / years, value),
@@ -2220,18 +2220,18 @@ make_grid_outcomes_long <- function(grid_results, spec = grid_outcome_spec, year
     )
 }
 
-# Differences between policies at the same coverage and sensitivity, for each comparison in
+# Differences between policies at the same proportion sent for testing and sensitivity, for each comparison in
 # policy_comparisons (diff = policy minus comparator; comparisons whose policies are not both in
 # the grid are skipped).
 make_grid_diffs <- function(grid_long, comparisons = policy_comparisons) {
   wide <- grid_long |>
-    select(outcome, prop_I_suspected, test_sens, isolation_policy, value) |>
+    select(outcome, prop_I_sent_for_testing, test_sens, isolation_policy, value) |>
     mutate(isolation_policy = as.character(isolation_policy)) |>
     pivot_wider(names_from = isolation_policy, values_from = value)
   comparisons |>
     filter(policy %in% names(wide), comparator %in% names(wide)) |>
     pmap(\(policy, comparator, label) wide |>
-           transmute(outcome, prop_I_suspected, test_sens, comparison = label,
+           transmute(outcome, prop_I_sent_for_testing, test_sens, comparison = label,
                      diff = .data[[policy]] - .data[[comparator]])) |>
     bind_rows() |>
     mutate(comparison = factor(comparison, levels = comparisons$label))
@@ -2249,30 +2249,30 @@ grid_theme <- theme_classic(base_size = grid_font_size) +
     strip.background      = element_blank()
   )
 
-# Axis/legend label for prop_I_suspected ("testing coverage"). The model uses this proportion to
+# Axis/legend label for prop_I_sent_for_testing (the proportion of CDI cases sent for testing). The model uses this proportion to
 # calculate the case identification rate gamma (see make_mod_parms()).
-coverage_axis_label         <- "Proportion of CDI cases sent for testing"
-coverage_axis_label_wrapped <- "Proportion of CDI cases\nsent for testing"
+sent_axis_label         <- "Proportion of CDI cases sent for testing"
+sent_axis_label_wrapped <- "Proportion of CDI cases\nsent for testing"
 
-# Testing coverage values drawn as lines on the line plots (a subset of the grid, for legibility).
-# Coverage must be below 100% (see make_mod_parms()), so the highest value is 99%.
-grid_line_coverage <- c(seq(0, 80, by = 20), 99) / 100
+# Values of the proportion sent for testing drawn as lines on the line plots (a subset of the grid, for legibility).
+# It must be below 100% (see make_mod_parms()), so the highest value is 99%.
+grid_line_sent <- c(seq(0, 80, by = 20), 99) / 100
 
-# Categorical colour scale for coverage on the line plots: 0% yellow to 99% purple
-grid_coverage_colour <- scale_colour_viridis_d(
-  coverage_axis_label,
+# Categorical colour scale for the proportion sent for testing on the line plots: 0% yellow to 99% purple
+grid_sent_colour <- scale_colour_viridis_d(
+  sent_axis_label,
   end       = 0.95,
   direction = -1,
   guide     = guide_legend(nrow = 1)
 )
 
-# Keep only the coverage values in grid_line_coverage (rounded to avoid floating-point mismatches)
-filter_line_coverage <- function(df, coverage = grid_line_coverage) {
-  df |> filter(round(prop_I_suspected, 6) %in% round(coverage, 6))
+# Keep only the proportion sent for testing values in grid_line_sent (rounded to avoid floating-point mismatches)
+filter_line_sent <- function(df, sent = grid_line_sent) {
+  df |> filter(round(prop_I_sent_for_testing, 6) %in% round(sent, 6))
 }
 
-# Coverage as an ordered factor of percentages, for the categorical legend
-coverage_factor <- function(x) {
+# Proportion sent for testing as an ordered factor of percentages, for the categorical legend
+sent_factor <- function(x) {
   factor(scales::percent(x, accuracy = 1), levels = scales::percent(sort(unique(x)), accuracy = 1))
 }
 
@@ -2289,23 +2289,23 @@ fmt_labels <- function(fmt, diff = FALSE) {
 
 spec_row <- function(spec, outcome_var) spec[spec$variable == outcome_var, ]
 
-### i) Line plot: outcome vs test sensitivity, one line per testing coverage ####
+### i) Line plot: outcome vs test sensitivity, one line per testing sent ####
 
 plot_grid_outcome_lines <- function(grid_long,
                                     outcome_var,
-                                    coverage = grid_line_coverage,
+                                    sent = grid_line_sent,
                                     spec     = grid_outcome_spec,
                                     y_label  = NULL) {
   s <- spec_row(spec, outcome_var)
   grid_long |>
     filter(outcome == outcome_var) |>
-    filter_line_coverage(coverage) |>
-    mutate(coverage = coverage_factor(prop_I_suspected)) |>
-    ggplot(aes(test_sens, value, colour = coverage, group = coverage)) +
+    filter_line_sent(sent) |>
+    mutate(sent = sent_factor(prop_I_sent_for_testing)) |>
+    ggplot(aes(test_sens, value, colour = sent, group = sent)) +
     geom_line(linewidth = 0.6) +
     geom_point(size = 0.7) +
     facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels), axes = "all_y") +
-    grid_coverage_colour +
+    grid_sent_colour +
     scale_x_continuous("Test sensitivity", labels = scales::percent) +
     scale_y_continuous(y_label %||% fmt_axis_label(s$fmt), labels = fmt_labels(s$fmt)) +
     labs(title = s$label) +
@@ -2332,21 +2332,21 @@ blank_first_panel <- function(p) {
 # its own y axis. Negative = less of the outcome than under P1. Returns a gtable.
 plot_grid_diff_lines <- function(grid_diffs,
                                  outcome_var,
-                                 coverage    = grid_line_coverage,
+                                 sent    = grid_line_sent,
                                  spec        = grid_outcome_spec,
                                  comparisons = ref_comparisons()) {
   s <- spec_row(spec, outcome_var)
   p <- grid_diffs |>
     filter(outcome == outcome_var, comparison %in% comparisons) |>
-    filter_line_coverage(coverage) |>
-    mutate(coverage   = coverage_factor(prop_I_suspected),
+    filter_line_sent(sent) |>
+    mutate(sent   = sent_factor(prop_I_sent_for_testing),
            comparison = factor(as.character(comparison), levels = c(" ", comparisons))) |>
-    ggplot(aes(test_sens, diff, colour = coverage, group = coverage)) +
+    ggplot(aes(test_sens, diff, colour = sent, group = sent)) +
     geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
     geom_line(linewidth = 0.6) +
     geom_point(size = 0.7) +
     facet_wrap(~ comparison, drop = FALSE, axes = "all_y") +
-    grid_coverage_colour +
+    grid_sent_colour +
     scale_x_continuous("Test sensitivity", labels = scales::percent) +
     scale_y_continuous(NULL, labels = fmt_labels(s$fmt, diff = TRUE)) +
     labs(title    = paste0(s$label, ": differences from P1 (no isolation)"),
@@ -2355,7 +2355,7 @@ plot_grid_diff_lines <- function(grid_diffs,
   blank_first_panel(p)
 }
 
-### iii) Heatmap: test sensitivity (x) by testing coverage (y) ####
+### iii) Heatmap: test sensitivity (x) by proportion sent for testing (y) ####
 
 # One fill scale shared across the policy panels, so colours are comparable between policies.
 plot_grid_outcome_heatmap <- function(grid_long, outcome_var, spec = grid_outcome_spec,
@@ -2363,7 +2363,7 @@ plot_grid_outcome_heatmap <- function(grid_long, outcome_var, spec = grid_outcom
   s <- spec_row(spec, outcome_var)
   grid_long |>
     filter(outcome == outcome_var) |>
-    ggplot(aes(test_sens, prop_I_suspected, fill = value)) +
+    ggplot(aes(test_sens, prop_I_sent_for_testing, fill = value)) +
     geom_tile() +
     facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels), axes = "all_y") +
     scale_fill_viridis_c(
@@ -2373,7 +2373,7 @@ plot_grid_outcome_heatmap <- function(grid_long, outcome_var, spec = grid_outcom
       guide     = guide_colourbar(barwidth = unit(6, "cm"), barheight = unit(0.3, "cm"))
     ) +
     scale_x_continuous("Test sensitivity", labels = scales::percent, expand = c(0, 0)) +
-    scale_y_continuous(coverage_axis_label_wrapped, labels = scales::percent, expand = c(0, 0)) +
+    scale_y_continuous(sent_axis_label_wrapped, labels = scales::percent, expand = c(0, 0)) +
     coord_fixed() +
     labs(title = s$label) +
     grid_theme
@@ -2390,7 +2390,7 @@ plot_grid_diff_heatmap <- function(grid_diffs, outcome_var, spec = grid_outcome_
   p <- grid_diffs |>
     filter(outcome == outcome_var, comparison %in% comparisons) |>
     mutate(comparison = factor(as.character(comparison), levels = c(" ", comparisons))) |>
-    ggplot(aes(test_sens, prop_I_suspected, fill = diff)) +
+    ggplot(aes(test_sens, prop_I_sent_for_testing, fill = diff)) +
     geom_tile() +
     facet_wrap(~ comparison, drop = FALSE, axes = "all_y") +
     scale_fill_viridis_c(
@@ -2450,7 +2450,7 @@ sensitivity_gain_spec <- grid_outcome_spec |>
     )
   )
 
-# For each outcome, isolation policy and testing coverage: values at sens_from and sens_to (annual
+# For each outcome, isolation policy and proportion sent for testing: values at sens_from and sens_to (annual
 # counts, from the grid_long values), and the change reported as set in sensitivity_gain_spec
 # (column gain).
 make_sensitivity_gain <- function(grid_long, sens_from, sens_to, spec = sensitivity_gain_spec) {
@@ -2463,11 +2463,11 @@ make_sensitivity_gain <- function(grid_long, sens_from, sens_to, spec = sensitiv
     mutate(test_sens = round(test_sens, 6)) |>
     filter(test_sens %in% round(c(sens_from, sens_to), 6)) |>
     mutate(sens = if_else(test_sens == round(sens_from, 6), "value_from", "value_to")) |>
-    select(outcome, isolation_policy, prop_I_suspected, sens, value) |>
+    select(outcome, isolation_policy, prop_I_sent_for_testing, sens, value) |>
     pivot_wider(names_from = sens, values_from = value) |>
     left_join(spec |> select(variable, direction), by = c("outcome" = "variable")) |>
     mutate(gain = if_else(direction == "avoided", value_from - value_to, value_to - value_from)) |>
-    arrange(outcome, isolation_policy, prop_I_suspected)
+    arrange(outcome, isolation_policy, prop_I_sent_for_testing)
 }
 
 # Title for one outcome, e.g. "1a) Incident CDI cases avoided per year by increasing test
@@ -2488,19 +2488,19 @@ gain_labels <- function(fmt) {
     scales::label_comma(accuracy = 1))
 }
 
-# Table for one outcome: testing coverage (rows) by isolation policy (columns)
-make_sensitivity_gain_table <- function(gain, outcome_var, coverage = grid_line_coverage,
+# Table for one outcome: testing sent (rows) by isolation policy (columns)
+make_sensitivity_gain_table <- function(gain, outcome_var, sent = grid_line_sent,
                                         spec = sensitivity_gain_spec) {
   lab <- gain_labels(spec_row(spec, outcome_var)$fmt)
   gain |>
     filter(outcome == outcome_var) |>
-    filter_line_coverage(coverage) |>
-    mutate(coverage = scales::percent(prop_I_suspected),
+    filter_line_sent(sent) |>
+    mutate(sent = scales::percent(prop_I_sent_for_testing),
            policy   = isolation_policy_labels[as.character(isolation_policy)],
            gain     = if_else(is.na(gain), "-", lab(gain))) |>
-    select(coverage, policy, gain) |>
+    select(sent, policy, gain) |>
     pivot_wider(names_from = policy, values_from = gain) |>
-    rename(!!coverage_axis_label := coverage)
+    rename(!!sent_axis_label := sent)
 }
 
 # Shades of one base colour for the isolation policies, from lightest (P1) to darkest (P3): each
@@ -2510,7 +2510,7 @@ policy_shades <- function(base = "#08519C", strength = c(0.4, 0.7, 1.0)) {
   set_names(ramp[round(100 * strength) + 1], isolation_policy_levels)
 }
 
-# Chart for one outcome: change against testing coverage, one line per isolation policy (shades of
+# Chart for one outcome: change against the proportion sent for testing, one line per isolation policy (shades of
 # one colour: P1 lightest, P3 darkest)
 plot_sensitivity_gain <- function(gain, outcome_var, sens_from, sens_to, spec = sensitivity_gain_spec) {
   s <- spec_row(spec, outcome_var)
@@ -2521,13 +2521,13 @@ plot_sensitivity_gain <- function(gain, outcome_var, sens_from, sens_to, spec = 
     paste0("Avoided", unit, " (negative = increase)"))
   gain |>
     filter(outcome == outcome_var) |>
-    ggplot(aes(prop_I_suspected, gain, colour = isolation_policy)) +
+    ggplot(aes(prop_I_sent_for_testing, gain, colour = isolation_policy)) +
     geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
     geom_line(linewidth = 0.7) +
     geom_point(size = 1.2) +
     scale_colour_manual("Isolation policy", values = policy_shades(),
                         labels = \(x) isolation_policy_labels[x]) +
-    scale_x_continuous(coverage_axis_label, labels = scales::percent, breaks = seq(0, 1, 0.2)) +
+    scale_x_continuous(sent_axis_label, labels = scales::percent, breaks = seq(0, 1, 0.2)) +
     scale_y_continuous(y_lab, labels = gain_labels(s$fmt)) +
     labs(title = stringr::str_wrap(sensitivity_gain_title(outcome_var, sens_from, sens_to, spec), 80)) +
     grid_theme +
@@ -2577,32 +2577,32 @@ make_grid_rates <- function(grid_results, years) {
 
 ## j) Example scenario facets (section 11) ####
 
-# Adds `policy` (P1-P3 labels) and `setting` (coverage and sensitivity) columns to a data frame with
-# a scenario column, parsed from scenario labels such as "P2_confirmed_cov050_sens100". `settings` is
-# a data frame of prop_I_suspected and test_sens giving the order of the settings (by default the
-# example_settings defined in the QMD; otherwise sorted by coverage then sensitivity).
-example_setting_label <- function(cov, sens) {
-  paste0("Coverage ", round(100 * cov), "%\nsensitivity ", round(100 * sens), "%")
+# Adds `policy` (P1-P3 labels) and `setting` (proportion sent for testing and sensitivity) columns to a data frame with
+# a scenario column, parsed from scenario labels such as "P2_confirmed_test050_sens100". `settings` is
+# a data frame of prop_I_sent_for_testing and test_sens giving the order of the settings (by default the
+# example_settings defined in the QMD; otherwise sorted by proportion sent for testing then sensitivity).
+example_setting_label <- function(sent, sens) {
+  paste0("Sent for testing ", round(100 * sent), "%\nsensitivity ", round(100 * sens), "%")
 }
 
 add_scenario_facets <- function(df,
                                 settings = get0("example_settings", envir = globalenv(),
                                                 ifnotfound = NULL)) {
-  parts <- regmatches(df$scenario, regexec("^(P\\d)_.+_cov(\\d{3})_sens(\\d{3})$", df$scenario))
+  parts <- regmatches(df$scenario, regexec("^(P\\d)_.+_test(\\d{3})_sens(\\d{3})$", df$scenario))
   code  <- vapply(parts, \(x) if (length(x)) x[2] else NA_character_, "")
-  cov   <- vapply(parts, \(x) if (length(x)) as.numeric(x[3]) / 100 else NA_real_, 0)
+  sent   <- vapply(parts, \(x) if (length(x)) as.numeric(x[3]) / 100 else NA_real_, 0)
   sens  <- vapply(parts, \(x) if (length(x)) as.numeric(x[4]) / 100 else NA_real_, 0)
   if (is.null(settings)) {
-    settings <- distinct(tibble(prop_I_suspected = cov, test_sens = sens)) |>
-      arrange(prop_I_suspected, test_sens)
+    settings <- distinct(tibble(prop_I_sent_for_testing = sent, test_sens = sens)) |>
+      arrange(prop_I_sent_for_testing, test_sens)
   }
-  setting_levels <- example_setting_label(settings$prop_I_suspected, settings$test_sens)
+  setting_levels <- example_setting_label(settings$prop_I_sent_for_testing, settings$test_sens)
   policy <- names(isolation_policy_codes)[match(code, sub("_.*", "", isolation_policy_codes))]
   df |>
     mutate(
       policy      = factor(isolation_policy_labels[policy], levels = isolation_policy_labels[isolation_policy_levels]),
       policy_code = factor(code, levels = sub("_.*", "", isolation_policy_codes[isolation_policy_levels])),
-      setting     = factor(example_setting_label(cov, sens), levels = setting_levels)
+      setting     = factor(example_setting_label(sent, sens), levels = setting_levels)
     )
 }
 

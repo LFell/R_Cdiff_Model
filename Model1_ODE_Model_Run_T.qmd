@@ -1,5 +1,5 @@
 ---
-title: "Model 1 ODE Run (transfer-state version)"
+title: "Hospital CDI case ascertainment ODE model"
 format:
   html:
     toc: true
@@ -15,13 +15,9 @@ params:
 
 ## Introduction
 
-This script runs the ODE model for Model 1, which simulates the transmission dynamics of a healthcare-associated pathogen within a hospital setting. The model tracks the flow of patients through states of colonisation and infection, as well as the impact of testing and isolation practices on case detection, missed cases and transmission of *C. difficile* among hospital patients. It does not model testing of symptomatic patients whose symptoms are not caused by *C. difficile*, or asymptomatic patients.
+This script runs an ODE model for case ascertainment, which simulates testing for, and the transmission dynamics of a healthcare-associated pathogen within a hospital setting. The model structure and parameters are specified to track the flow of patients through states of colonisation and infection with toxigenic *C. difficile*, as well as the impact of testing and isolation practices on case detection, missed cases and consequent transmission of *C. difficile* among hospital patients. It does not model testing of symptomatic patients whose symptoms are not caused by *C. difficile*, or asymptomatic patients.
 
-![](Images/261015_Policy_1.png)
-
-![](Images/261015_Policy_2.png)
-
-![](Images/261015_Policy_3.png) The main model compartments are:\
+![](Images/261021 P1-P3 combined .png) The main model compartments are:\
 - **S (Susceptible)**: Not colonised or infected\
 - **C (Colonised)**: Carrying the pathogen but not infected\
 - **I (Infected)**: Showing symptoms caused by the pathogen\
@@ -47,14 +43,14 @@ T1 and T3 transmit at `betaI` on a general ward, T4 at `betaI * beta_mult_isolat
 
 **Control variables**. The control variables for scenarios are set as vectors in section 3, and every combination is run:\
 - **isolation_policy**: Which patients are isolated in a side room, from least to most isolation: P1 `"none"` (neither suspected nor confirmed cases; the reference policy), P2 `"confirmed"` (confirmed cases only) or P3 `"suspected_and_confirmed"` (suspected cases awaiting test results and confirmed cases, as recommended in best-practice guidance). P2 and P3 are compared with P1, and P3 with P2 (the incremental effect of also isolating suspected cases).\
-- **prop_I_suspected** (testing coverage): Proportion of CDI cases sent for testing (must be below 100%)\
-- **test_sens**: Sensitivity of the diagnostic test
+- **prop_I_sent_for_testing**: Proportion of CDI cases sent for testing (must be below 100%).\
+- **test_sens**: Sensitivity of the diagnostic testing algorithm.
 
 Test turnaround time (`t_test_turnaround`) is a fixed parameter in `Scripts/Model1_ODE_Parameters_T.R`, but could be set as a control variable if different testing algorithms are expected to have different turnaround times.
 
-**Scenarios modelled.** This quarto document uses the ODE function defined in "Model1_ODE_Functions_T.R" and the parameter sets defined in "Model1_ODE_Parameters_T.R" to run a grid of scenarios covering every combination of the control variables, and generates outputs including outcomes for every scenario (annual totals after a burn-in period), plots comparing the isolation policies across testing coverage and test sensitivity, rates per 10,000 patient bed-days, and time series, stabilisation checks and annual summaries for a small set of example scenarios. The outputs are saved as CSV files in a labelled subdirectory of `Outputs/Transfer_states/` and key results are also presented in tables and plots.
+**Scenarios modelled.** This quarto document uses the ODE function defined in "Model1_ODE_Functions_T.R" and the parameter sets defined in "Model1_ODE_Parameters_T.R" to run a grid of scenarios covering every combination of the control variables, and generates outputs including outcomes for every scenario (annual totals after a burn-in period), plots comparing the isolation policies across the proportion of CDI cases sent for testing and test sensitivity, rates per 10,000 patient bed-days, and time series, stabilisation checks and annual summaries for a small set of example scenarios. The outputs are saved as CSV files in a labelled subdirectory of `Outputs/Transfer_states/` and key results are also presented in tables and plots.
 
-**Note on testing coverage.** Testing coverage (`prop_I_suspected`) is the proportion of CDI cases sent for testing: the share of patients entering I who are identified as suspected cases before they are discharged or die. Identification competes with discharge and death from I, so `prop_I_suspected = gamma / (gamma + disI + mortI)`, and the model sets the case identification rate as `gamma = prop_I_suspected * (disI + mortI) / (1 - prop_I_suspected)`. Patients move at this rate from I to Xtest, or under P3 to T3 (awaiting a side room) and then to Xtest. Transfer time is not added to `gamma`. Coverage must be below 100%, as `gamma` would be infinite at 100%, so the highest value in the grid is 99%. The mean time in I before identification, `1 / (gamma + disI + mortI)`, is therefore longer at lower coverage: with the default parameters, about 9 days at 33%, 7 days at 50% and 1.4 days at 90%. The baseline value is set from the share of hospital-onset diarrhoea patients who had ever been tested for CDI during their stay in a point-prevalence study (Mawer et al. 2019, doi 10.1016/j.jhin.2019.05.001). That is a share of *current* cases, not of all incident cases, so the model also reports its own point-prevalence equivalent (the share of current CDI cases who have ever been tested) for comparison; see section 12. Plots and tables label this control variable "Proportion of CDI cases sent for testing".
+**Note on the proportion of CDI cases sent for testing.** `prop_I_sent_for_testing` is the proportion of CDI cases sent for testing: the share of patients entering I who are identified as suspected cases before they are discharged or die. Identification competes with discharge and death from I, so `prop_I_sent_for_testing = gamma / (gamma + disI + mortI)`, and the model sets the case identification rate as `gamma = prop_I_sent_for_testing * (disI + mortI) / (1 - prop_I_sent_for_testing)`. Patients move at this rate from I to Xtest, or under P3 to T3 (awaiting a side room) and then to Xtest. It must be below 100%, as `gamma` would be infinite at 100%, so the highest value in the grid is 99%. The mean time in I before identification, `1 / (gamma + disI + mortI)`, is therefore longer when fewer cases are sent for testing: with the default parameters, about 9 days at 33%, 7 days at 50% and 1.4 days at 90%. The baseline value is set from the share of hospital-onset diarrhoea patients who had ever been tested for CDI during their stay in a point-prevalence study (Mawer et al. 2019, doi 10.1016/j.jhin.2019.05.001). That is a share of *current* cases, not of all incident cases, so the model also reports its own point-prevalence equivalent (the share of current CDI cases who have ever been tested) for comparison; see table in section 12 and plot in section 13. Plots and tables label this control variable "Proportion of CDI cases sent for testing".
 
 **Note on test algorithm sensitivity.** The model uses the test sensitivity (`test_sens`) and the test turnaround time to calculate two rates out of Xtest:
 
@@ -69,13 +65,13 @@ Neither rate includes transfer time, so the share of results that are positive, 
 
 Default parameter values are given in brackets; they are set in `Scripts/Model1_ODE_Parameters_T.R`.
 
-*Pathogen and population*
+**Pathogen and population**
 
 - A single toxigenic strain is in circulation.
 - The hospital is a single, well-mixed population: there are no separate wards or bays. The model is deterministic and its parameters don't change over time (no seasonality).
 - Patients are not followed after discharge. Readmission is not modelled.
 
-*Admissions and discharges*
+**Admissions and discharges**
 
 - Admissions arrive at a constant rate (133/day). They do not replace discharges, so the hospital census can vary.
 - Admissions are split between S, C and I in fixed proportions reflecting community prevalence (8.6% colonised, 0.2% infected, the rest susceptible). Community prevalence is fixed and isn't affected by discharges from the hospital.
@@ -92,7 +88,7 @@ Default parameter values are given in brackets; they are set in `Scripts/Model1_
   - Xtreat dies at 1.5× the baseline (`mortXtreat_mult`);
   - recovered patients awaiting transfer (T2, T5) die at the baseline rate.
 
-*Colonisation and progression*
+**Colonisation and progression**
 
 - Susceptible patients become colonised through:
   - background acquisition from spores in the environment, at a constant rate that doesn't depend on the number of patients in each state (β₀ = 0.002);
@@ -110,17 +106,17 @@ Default parameter values are given in brackets; they are set in `Scripts/Model1_
 - There is no immunity, and no recurrence or relapse. Patients who recover after treatment return to the susceptible state.
 - Colonised patients are not screened, detected or decolonised.
 
-*Case identification and testing*
+**Case identification and testing**
 
 - Only infected (symptomatic) patients are identified as suspected cases and tested. Patients in S and C don't develop diarrhoea that leads to testing. The test is assumed 100% specific, so there are no false positives. As a result, "faecal specimens tested" counts only tests of patients with CDI, and underestimates real testing volume.
-- Testing coverage (the proportion of CDI cases sent for testing) sets the identification rate. It is the share of infected patients identified before they are discharged or die, so the mean time to identification is not set separately: it is shorter at higher coverage (see the note on testing coverage above).
+- The proportion of CDI cases sent for testing sets the identification rate. It is the share of infected patients identified before they are discharged or die, so the mean time to identification is not set separately: it is shorter when more cases are sent for testing (see the note on the proportion of CDI cases sent for testing above).
 - Test results arrive after a fixed turnaround time (2 days). Each test, including retests, returns a positive result with probability equal to the test sensitivity. Results of repeat tests on the same patient are independent.
 - Patients with a false-negative result return to a general ward (FN), still symptomatic and transmitting. They are retested after a mean of 7 days unless they are discharged or die first.
 - Confirmed cases are treated. Under P2 and P3 they are isolated; under P1 they stay on a general ward.
 - Moving a patient between a general ward and a side room takes a mean of 0.5 days. Patients wait for the move in a transfer state (T1-T5) in their original bed, and leave it at rate `tau = 1 / t_patient_transfer`. Transfer time is not added to the rates of any other transition.
 - Side-room capacity is unlimited.
 
-*Outcome definitions*
+**Outcome definitions**
 
 - **Missed cases:** patients who leave I, FN, T3 (awaiting a side room before the specimen is taken) or T4 (false negatives awaiting return to the ward) by discharge or death without a confirmed diagnosis. Deaths while awaiting a result (in Xtest, after the specimen is taken) count as neither missed nor confirmed.
 - **Hospital-onset CDI:** all in-hospital C→I progressions, i.e. patients admitted colonised plus patients colonised in hospital who progress to CDI during their stay.
@@ -161,23 +157,23 @@ source("Scripts/Model1_ODE_Parameters_T.R")
 
 ## 3) Set values for control variables
 
-Set the values of each control variable as a vector. Every combination of isolation policy, testing coverage and test sensitivity is run (the scenario grid). Scenario labels combine a policy code (`P1_none`, `P2_confirmed`, `P3_susp_conf`) with the coverage and sensitivity as percentages, e.g. `P2_confirmed_cov050_sens100`.
+Set the values of each control variable as a vector. Every combination of isolation policy, proportion of CDI cases sent for testing and test sensitivity is run (the scenario grid). Scenario labels combine a policy code (`P1_none`, `P2_confirmed`, `P3_susp_conf`) with the proportion sent for testing and sensitivity as percentages, e.g. `P2_confirmed_test050_sens100`.
 
-A small set of example scenarios is taken from the grid for the time-series plots, annual summaries and outcome tables (sections 9 to 12): each isolation policy at each coverage and sensitivity setting in `example_settings`, in the order listed (by default 0%/0%, 50%/50%, 99% coverage/50% sensitivity, 50% coverage/100% sensitivity and 99%/100%; 15 scenarios). At 0% coverage nobody is tested, so the three policies give the same results; it is included as a no-testing baseline for each policy.
+A small set of example scenarios is taken from the grid for the time-series plots, annual summaries and outcome tables (sections 9 to 12): each isolation policy at each setting of proportion sent for testing and sensitivity in `example_settings`, in the order listed (by default, sent for testing/sensitivity: 0%/0%, 50%/50%, 99%/50%, 50%/100% and 99%/100%; 15 scenarios). When 0% are sent for testing nobody is tested, so the three policies give the same results; it is included as a no-testing baseline for each policy.
 
 ```{r}
 #| label: set-values-for-control-variable-values 
 
 # Control variables: every combination is run
 isolation_policy <- c("none", "confirmed", "suspected_and_confirmed")   # P1, P2, P3
-prop_I_suspected <- c(seq(0, 90, by = 10), 99) / 100   # testing coverage (must be < 1)
+prop_I_sent_for_testing <- c(seq(0, 90, by = 10), 99) / 100   # proportion of CDI cases sent for testing (must be < 1)
 test_sens        <- seq(0, 100, by = 10) / 100
 
-scenario_grid <- make_scenario_grid(isolation_policy, prop_I_suspected, test_sens)
+scenario_grid <- make_scenario_grid(isolation_policy, prop_I_sent_for_testing, test_sens)
 
 # Example settings, in the order shown in sections 9 and 11 (must be values in the vectors above)
 example_settings <- tribble(
-  ~prop_I_suspected, ~test_sens,
+  ~prop_I_sent_for_testing, ~test_sens,
   0,                 0,
   0.5,               0.5,
   0.99,              0.5,
@@ -186,7 +182,7 @@ example_settings <- tribble(
 )
 
 example_grid <- scenario_grid |>
-  semi_join(example_settings, by = c("prop_I_suspected", "test_sens"))
+  semi_join(example_settings, by = c("prop_I_sent_for_testing", "test_sens"))
 if (nrow(example_grid) != length(isolation_policy) * nrow(example_settings)) {
   stop("Some example settings are not in the grid: check example_settings against the vectors above.")
 }
@@ -197,7 +193,7 @@ write_csv(control_parms,
           file.path(output_dir, "scenario_control_parameters.csv"))
 
 cat("Scenario grid:", nrow(scenario_grid), "scenarios (",
-    length(isolation_policy), "policies x", length(prop_I_suspected), "coverage values x",
+    length(isolation_policy), "policies x", length(prop_I_sent_for_testing), "proportion sent for testing values x",
     length(test_sens), "sensitivity values). Example scenarios:", nrow(example_grid), "\n")
 ```
 
@@ -315,9 +311,9 @@ write_csv(grid_runs$parms,
 write_csv(grid_runs$patient_days, file.path(output_dir, "patient_days_summary.csv"))
 
 # Example scenarios: re-run and keep full time series
-example_parms <- pmap(example_grid, \(scenario, isolation_policy, prop_I_suspected, test_sens)
+example_parms <- pmap(example_grid, \(scenario, isolation_policy, prop_I_sent_for_testing, test_sens)
   make_mod_parms(isolation_policy = isolation_policy,
-                 prop_I_suspected = prop_I_suspected,
+                 prop_I_sent_for_testing = prop_I_sent_for_testing,
                  test_sens        = test_sens,
                  scenario_label   = scenario)) |>
   set_names(example_grid$scenario)
@@ -397,7 +393,7 @@ knitr::kable(stability_examples, caption = "Stabilisation: model states and flow
 
 Sections 9 to 11 show results for the example scenarios that help verify the model is working as expected; sections 12 to 14 present the results for the write-up.
 
-Plot the model states and flows over time for the example scenarios, from the start of the run up to the longest stabilisation period across the example scenarios (section 8), i.e. the approach to steady state during the burn-in. The plots show each isolation policy in a column (P1, P2, P3) and each coverage and sensitivity setting in a row, in the order set in `example_settings` (section 3). Each plot is saved as a PNG file in the output directory and shown in a tab.
+Plot the model states and flows over time for the example scenarios, from the start of the run up to the longest stabilisation period across the example scenarios (section 8), i.e. the approach to steady state during the burn-in. The plots show each isolation policy in a column (P1, P2, P3) and each setting of proportion sent for testing and sensitivity in a row, in the order set in `example_settings` (section 3). Each plot is saved as a PNG file in the output directory and shown in a tab.
 
 ```{r}
 #| label: time-series-plots-save
@@ -468,7 +464,7 @@ knitr::kable(annual_summary_all |> filter(year == 1),
 
 ## 11) Plots of annual summaries
 
-Stacked bar plots of annual totals over the analysis period after the burn-in, for the example scenarios, grouped by coverage and sensitivity setting (in the order set in `example_settings`), with P1, P2 and P3 side by side within each group:
+Stacked bar plots of annual totals over the analysis period after the burn-in, for the example scenarios, grouped by setting of proportion sent for testing and sensitivity (in the order set in `example_settings`), with P1, P2 and P3 side by side within each group:
 
 - **Colonisations by source**: hospital-acquired colonisations from background acquisition (`beta0`) and from patient-to-patient transmission (secondary colonisations) from each state (C, I, Xtest, FN, Xtreat, and the transfer states T1, T3 and T4, each shown in a lighter shade next to the state it belongs to). These are colonisations, not CDI cases. For modelling simplicity, the background acquisition rate does not depend on the number of patients in each state.
 - **Faecal specimens tested**: first tests and retests of false negatives.
@@ -517,7 +513,7 @@ Sections 12 to 14 present the results for the write-up (sections 9 to 11 are ver
 
 The model is designed to focus on diagnostic testing of hospital patients with CDI. It does not include testing of symptomatic patients without CDI, or screening asymptomatic patients.
 
-It can be used to quantify the effect of changes in testing algorithm sensitivity for different levels of testing coverage for symptomatic hospital patients with CDI and different hospital policies on location of suspected cases awaiting test results and/or confirmed cases while receiving treatment (i.e. on a general ward versus isolated in a side-room). The value of other parameters, such as test turnaround time and time required for patient transfers between general ward and side room beds can be varied for sensitivity analysis.
+It can be used to quantify the effect of changes in testing algorithm sensitivity for different proportions of symptomatic hospital patients with CDI sent for testing and different hospital policies on location of suspected cases awaiting test results and/or confirmed cases while receiving treatment (i.e. on a general ward versus isolated in a side-room). The value of other parameters, such as test turnaround time and time required for patient transfers between general ward and side room beds can be varied for sensitivity analysis.
 
 Differences in total and hospital-onset CDI cases between scenarios are driven entirely by differences in hospital-acquired CDI because:
 
@@ -568,7 +564,7 @@ Model outcomes required for calculation of an ICER for a change in testing or is
 **ICER numerator, change in costs**
 
 | Model outcome | ICER numerator |
-|----|----|
+|------------------------------------|------------------------------------|
 | Number of patient days on a general ward | × general ward care, cost per day |
 | Number of patient days in a side room | × side room care, cost per day |
 | Number of confirmed CDI cases | × CDI antimicrobial therapy, cost per course of treatment |
@@ -583,7 +579,7 @@ Model outcomes required for calculation of an ICER for a change in testing or is
 **ICER denominator, avoided QALY loss**
 
 | Model outcome                          | ICER denominator                  |
-|----------------------------------------|-----------------------------------|
+|--------------------------------------|----------------------------------|
 | Number of treated, recovered CDI cases | × QALY loss for treated cases     |
 | Number of untreated, discharged cases  | × QALY loss for untreated cases   |
 | Number of CDI-attributable deaths      | × discounted QALY loss for deaths |
@@ -597,9 +593,9 @@ The table shows the outcomes of interest for the example scenarios, numbered as 
 - The proportions of incident CDI cases confirmed (1d) and missed (1b) do not sum to 1: the gap is mainly deaths while awaiting a test result (tested, but neither confirmed nor missed).
 - Differences in prevalence (2b) are discharge minus admission prevalence in percentage points (pp); a positive value indicates the hospital is a net source.
 - CDI-attributable deaths (4d) are deaths following CDI that would not have occurred at the baseline death rate: deaths of untreated CDI patients (I, Xtest, FN, and T1, T3 and T4 awaiting transfer) × (1 − 1/`mortI_mult`) plus deaths of treated patients (Xtreat) × (1 − 1/`mortXtreat_mult`). Recovered patients awaiting transfer (T2, T5) die at the baseline rate and are not CDI deaths.
-- Specimens tested per confirmed case (3f) is shown as "-" where no cases are confirmed (0% coverage or sensitivity).
+- Specimens tested per confirmed case (3f) is shown as "-" where no cases are confirmed (0% sent for testing or 0% sensitivity).
 
-The effect of the isolation policies across testing coverage and test sensitivity is shown in section 13, and the change in outcomes from improving test sensitivity, for each policy, in section 14.
+The effect of the isolation policies across the proportion of CDI cases sent for testing and test sensitivity is shown in section 13, and the change in outcomes from improving test sensitivity, for each policy, in section 14.
 
 Final cumulative outcomes for every scenario in the grid (totals over the `r analysis_years`-year analysis period after the burn-in) are saved as CSVs:
 
@@ -628,48 +624,48 @@ write_csv(make_research_outcomes_table(annualise(final_outcomes), annualise(grid
 knitr::kable(research_outcomes, caption = "Research question outcomes and ICER inputs per year after the burn-in, example scenarios")
 ```
 
-**Testing coverage compared with point-prevalence studies.** Testing coverage is the share of *incident* CDI cases sent for testing before discharge or death (calculated as suspected cases identified / incident CDI cases, which equals `prop_I_suspected` at steady state). Point-prevalence studies such as Mawer et al. (2019) report the share of *current* cases who have ever been tested during their stay. The model equivalent is the share of CDI patient-days spent in a tested state, averaged over the analysis period. The specimen is taken on entry to Xtest, so the tested states are Xtest, FN, Xtreat, T1 and T4, plus the share of T3 (awaiting a side room under P3) that came from FN; patients in I, and those in T3 who came from I, have not yet been tested. T3 is not split by origin, so its share from FN is estimated from the inflows to T3 (exact at steady state). The two differ because tested and untested cases stay in hospital for different lengths of time, and the point-prevalence share also depends on the policy and test sensitivity. The table shows both, at the test sensitivity set below.
+**Proportion of CDI cases sent for testing compared with point-prevalence studies.** The proportion of CDI cases sent for testing is the share of *incident* CDI cases sent for testing before discharge or death (calculated as suspected cases identified / incident CDI cases, which equals `prop_I_sent_for_testing` at steady state). Point-prevalence studies such as Mawer et al. (2019) report the share of *current* cases who have ever been tested during their stay. The model equivalent is the share of CDI patient-days spent in a tested state, averaged over the analysis period. The specimen is taken on entry to Xtest, so the tested states are Xtest, FN, Xtreat, T1 and T4, plus the share of T3 (awaiting a side room under P3) that came from FN; patients in I, and those in T3 who came from I, have not yet been tested. T3 is not split by origin, so its share from FN is estimated from the inflows to T3 (exact at steady state). The two differ because tested and untested cases stay in hospital for different lengths of time, and the point-prevalence share also depends on the policy and test sensitivity. The table shows both, at the test sensitivity set below.
 
 ```{r}
-#| label: coverage-point-prevalence
-coverage_check_sens <- 0.5   # must be a value in the test_sens vector
+#| label: sent-for-testing-point-prevalence
+sent_check_sens <- 0.5   # must be a value in the test_sens vector
 
-coverage_check <- grid_results |>
-  filter(abs(test_sens - coverage_check_sens) < 1e-6) |>
+sent_check <- grid_results |>
+  filter(abs(test_sens - sent_check_sens) < 1e-6) |>
   mutate(policy = isolation_policy_labels[as.character(isolation_policy)]) |>
-  select(prop_I_suspected, prop_sent_for_testing, policy, prop_current_CDI_tested) |>
+  select(prop_I_sent_for_testing, prop_sent_for_testing, policy, prop_current_CDI_tested) |>
   pivot_wider(names_from = policy, values_from = prop_current_CDI_tested) |>
   # prop_sent_for_testing is the same under every policy; keep the first
-  group_by(prop_I_suspected) |>
+  group_by(prop_I_sent_for_testing) |>
   summarise(across(everything(), \(x) x[!is.na(x)][1]), .groups = "drop")
-write_csv(coverage_check, file.path(output_dir, "coverage_point_prevalence.csv"))
+write_csv(sent_check, file.path(output_dir, "sent_for_testing_point_prevalence.csv"))
 
 knitr::kable(
-  coverage_check |>
+  sent_check |>
     mutate(across(everything(), \(x) scales::percent(x, accuracy = 0.1))) |>
-    rename("Testing coverage (prop_I_suspected)" = prop_I_suspected,
+    rename("Proportion of CDI cases sent for testing (prop_I_sent_for_testing)" = prop_I_sent_for_testing,
            "CDI cases sent for testing (% of incident cases)" = prop_sent_for_testing),
-  caption = paste0("Testing coverage and the share of current CDI cases ever tested (point ",
-                   "prevalence) under each policy, at ", scales::percent(coverage_check_sens),
+  caption = paste0("Proportion of CDI cases sent for testing and the share of current CDI cases ever tested (point ",
+                   "prevalence) under each policy, at ", scales::percent(sent_check_sens),
                    " test sensitivity")
 )
 ```
 
-## 13) Outcomes by testing coverage and test sensitivity
+## 13) Outcomes by proportion of CDI cases sent for testing and test sensitivity
 
-Compare the three isolation policies across every combination of testing coverage and test sensitivity in the grid, for the research question outcomes 1a, 1b, 1c, 1d (proportion), 1e (proportion), 2a, 2b, 3a, 3c, 3e and 3f (set by the `plot` column of `grid_outcome_spec` in `Scripts/Model1_ODE_Functions_T.R`). Counts are annual totals over the analysis period (the `r analysis_years`-year total after a `r burn_in`-day burn-in, divided by `r analysis_years`); proportions and prevalence differences are over the whole analysis period. The other research question outcomes are tabulated in section 12 and saved in `final_outcomes_all.csv`.
+Compare the three isolation policies across every combination of proportion of CDI cases sent for testing and test sensitivity in the grid, for the research question outcomes 1a, 1b, 1c, 1d (proportion), 1e (proportion), 2a, 2b, 3a, 3c, 3e and 3f (set by the `plot` column of `grid_outcome_spec` in `Scripts/Model1_ODE_Functions_T.R`). Counts are annual totals over the analysis period (the `r analysis_years`-year total after a `r burn_in`-day burn-in, divided by `r analysis_years`); proportions and prevalence differences are over the whole analysis period. The other research question outcomes are tabulated in section 12 and saved in `final_outcomes_all.csv`.
 
 **Note on total and hospital-acquired CDI cases.** Differences in total CDI cases (1a) between scenarios are driven entirely by differences in hospital-acquired CDI cases (2a), so the difference plots for 1a and 2a are identical. Admissions arrive at a fixed rate, so patients admitted with CDI (`r scales::comma(round(grid_results_annual$cum_admitted_infected[1]))` per year) and patients admitted colonised are the same in every scenario. Testing and isolation act only on infected patients, so they do not change how colonised patients progress, lose colonisation or leave hospital, and progressions to CDI among patients admitted colonised are also the same in every scenario (`r scales::comma(round(grid_results_annual$cum_infected_in_hospital[1] - grid_results_annual$cum_hospital_attributable_I[1]))` per year). Total and hospital-onset CDI cases therefore differ from hospital-acquired CDI cases by a constant.
 
 Each tab shows one outcome, as:
 
-1.  **Line plot**: outcome against test sensitivity, with one line for each of 0%, 20%, 40%, 60%, 80% and 99% testing coverage (`grid_line_coverage`), and the same y axis for each isolation policy.
-2.  **Differences from P1**: the same, for P2 minus P1 and P3 minus P1 at the same testing coverage and test sensitivity, placed under P2 and P3 in the line plot above (the space under P1 is left empty). A negative value means less of the outcome than with no isolation. This shows the effect of each isolation policy more clearly than the totals, which are dominated by the differences across coverage.
-3.  **Heatmaps**: test sensitivity (x) by testing coverage (y), for every grid value. The top row shows the outcome under each policy, with one colour scale shared across the policies (yellow lowest, purple highest). The bottom row shows the differences P2 minus P1 and P3 minus P1, under P2 and P3 (the space under P1 is left empty), with one colour scale shared across both (yellow largest negative difference, purple largest positive difference).
+1.  **Line plot**: outcome against test sensitivity, with one line for each of 0%, 20%, 40%, 60%, 80% and 99% of CDI cases sent for testing (`grid_line_sent`), and the same y axis for each isolation policy.
+2.  **Differences from P1**: the same, for P2 minus P1 and P3 minus P1 at the same proportion sent for testing and test sensitivity, placed under P2 and P3 in the line plot above (the space under P1 is left empty). A negative value means less of the outcome than with no isolation. This shows the effect of each isolation policy more clearly than the totals, which are dominated by the differences across the proportion sent for testing.
+3.  **Heatmaps**: test sensitivity (x) by proportion of CDI cases sent for testing (y), for every grid value. The top row shows the outcome under each policy, with one colour scale shared across the policies (yellow lowest, purple highest). The bottom row shows the differences P2 minus P1 and P3 minus P1, under P2 and P3 (the space under P1 is left empty), with one colour scale shared across both (yellow largest negative difference, purple largest positive difference).
 
 Differences between policies, including P3 vs P2 (the incremental effect of also isolating suspected cases), are saved in `grid_key_outcome_differences.csv`.
 
-At 0% testing coverage no patients are tested, so test sensitivity has no effect and the line is flat.
+When 0% of CDI cases are sent for testing no patients are tested, so test sensitivity has no effect and the line is flat.
 
 **Note on very low test sensitivity.** At low sensitivity (roughly 10% or below), testing can increase CDI, hospital-acquired CDI, missed cases and deaths compared with no testing. Most tested patients receive a false negative result and return to the general ward (FN), where they continue to transmit at `betaI`. They are retested after `t_wait_retest` days, which is sooner than the typical time to discharge, so many cycle repeatedly between FN and awaiting a result (Xtest). There is no discharge from Xtest, so each retest also keeps them in hospital for longer. These patients are held back from treatment (and, for confirmed cases, isolation), and are kept infectious in hospital for longer than untested patients. This is intended: it shows the effect of testing with a low-sensitivity assay.
 
@@ -679,41 +675,41 @@ At 0% testing coverage no patients are tested, so test sensitivity has no effect
 # Helpers for the figures quoted in the notes in sections 13 and 14 (calculated from the grid as
 # annual totals, so they stay correct if parameters change)
 P1 <- "none"; P2 <- "confirmed"; P3 <- "suspected_and_confirmed"
-# Highest testing coverage in the grid (coverage must be below 100%), used for the figures below
-max_cov <- max(grid_results$prop_I_suspected)
-on_grid <- function(df, pol, cov, sens) {
-  df$isolation_policy == pol & abs(df$prop_I_suspected - cov) < 1e-6 & abs(df$test_sens - sens) < 1e-6
+# Highest proportion of CDI cases sent for testing in the grid (must be below 100%), used for the figures below
+max_sent <- max(grid_results$prop_I_sent_for_testing)
+on_grid <- function(df, pol, sent, sens) {
+  df$isolation_policy == pol & abs(df$prop_I_sent_for_testing - sent) < 1e-6 & abs(df$test_sens - sens) < 1e-6
 }
 # Annual value of a final outcome column for one scenario
-gval <- function(var, pol, cov, sens) grid_results_annual[[var]][on_grid(grid_results_annual, pol, cov, sens)]
+gval <- function(var, pol, sent, sens) grid_results_annual[[var]][on_grid(grid_results_annual, pol, sent, sens)]
 # Share of test results that are positive, theta / (theta + pi + mortXtest)
-pos_share <- function(pol, sens, cov = max_cov) {
-  p <- grid_runs$parms[on_grid(grid_runs$parms, pol, cov, sens), ]
+pos_share <- function(pol, sens, sent = max_sent) {
+  p <- grid_runs$parms[on_grid(grid_runs$parms, pol, sent, sens), ]
   p$theta / (p$theta + p$pi + p$mortXtest)
 }
 n0 <- function(x) scales::comma(round(x))
 n0p <- function(x) scales::comma(round(x), style_positive = "plus")
 pc <- function(x) scales::percent(x, accuracy = 1)
 
-# Missed CDI cases per year at the highest coverage: P3 minus P1 by sensitivity
+# Missed CDI cases per year at the highest proportion sent for testing: P3 minus P1 by sensitivity
 miss_gap <- tibble(sens = sort(unique(grid_results$test_sens))) |>
-  mutate(gap = map_dbl(sens, \(s) gval("cum_total_missed_cases", P3, max_cov, s) -
-                                  gval("cum_total_missed_cases", P1, max_cov, s)))
+  mutate(gap = map_dbl(sens, \(s) gval("cum_total_missed_cases", P3, max_sent, s) -
+                                  gval("cum_total_missed_cases", P1, max_sent, s)))
 miss_trough_sens <- miss_gap$sens[which.min(miss_gap$gap)]
 # Lowest sensitivity at which P3 has more missed cases than P1 (NA if it never does)
 miss_cross_sens  <- if (any(miss_gap$gap > 0)) min(miss_gap$sens[miss_gap$gap > 0]) else NA_real_
 ```
 
-**Note on differences between isolation policies at low test sensitivity.** At 0% testing coverage, nobody is identified as a suspected case, so no patients reach Xtest or Xtreat and the three policies give identical results. With coverage above 0% and low sensitivity, there are more CDI cases (and hospital-acquired CDI and colonisations) under P1 and P2 than under P3. This is not because infected patients stay longer in I: identified patients leave I sooner than without testing (I patient-days fall sharply). The extra transmission happens after they leave I, while they cycle between awaiting a result (Xtest) and false negatives on the ward (FN):
+**Note on differences between isolation policies at low test sensitivity.** When 0% of CDI cases are sent for testing, nobody is identified as a suspected case, so no patients reach Xtest or Xtreat and the three policies give identical results. With more than 0% sent for testing and low sensitivity, there are more CDI cases (and hospital-acquired CDI and colonisations) under P1 and P2 than under P3. This is not because infected patients stay longer in I: identified patients leave I sooner than without testing (I patient-days fall sharply). The extra transmission happens after they leave I, while they cycle between awaiting a result (Xtest) and false negatives on the ward (FN):
 
-- Under P1 and P2, suspected cases wait for their result on a general ward and transmit at the full `betaI`. Under P3 they wait in a side room and transmit at `betaI * beta_mult_isolated`. With repeated retesting, patients spend many days in Xtest, so this difference drives most of the gap: at `r pc(max_cov)` coverage and 0% sensitivity, colonisations from Xtest are about `r n0(signif(gval("cum_colonised_from_Xtest", P1, max_cov, 0), 2))` per year under P1 and P2 and about `r n0(signif(gval("cum_colonised_from_Xtest", P3, max_cov, 0), 2))` under P3.
+- Under P1 and P2, suspected cases wait for their result on a general ward and transmit at the full `betaI`. Under P3 they wait in a side room and transmit at `betaI * beta_mult_isolated`. With repeated retesting, patients spend many days in Xtest, so this difference drives most of the gap: at `r pc(max_sent)` sent for testing and 0% sensitivity, colonisations from Xtest are about `r n0(signif(gval("cum_colonised_from_Xtest", P1, max_sent, 0), 2))` per year under P1 and P2 and about `r n0(signif(gval("cum_colonised_from_Xtest", P3, max_sent, 0), 2))` under P3.
 - From about 10% sensitivity, some cases are confirmed. P1 is then higher than P2, because confirmed cases (Xtreat) are treated on a general ward and transmit at `betaXtreat` rather than `betaXtreat * beta_mult_isolated`.
 
-**Note on missed CDI cases** (tab 1b, Missed CDI cases). The figures below are per year, at `r pc(max_cov)` testing coverage; see also the note on missed cases in the introduction.
+**Note on missed CDI cases** (tab 1b, Missed CDI cases). The figures below are per year, with `r pc(max_sent)` of CDI cases sent for testing; see also the note on missed cases in the introduction.
 
-- **Line plot: more missed cases under P1 and P2 at low sensitivity.** At low sensitivity most missed cases are false negatives, and P1 and P2 have more than P3 because there are more CDI cases to miss, as suspected cases wait for their result on a general ward (see the note above): at 0% sensitivity, there are `r n0(gval("cum_total_infected_incidence", P1, max_cov, 0) - gval("cum_total_infected_incidence", P3, max_cov, 0))` more CDI cases per year under P1 and P2 than under P3. The share of results that are positive is the same under every policy (equal to the test sensitivity; see the note on test sensitivity in the introduction).
+- **Line plot: more missed cases under P1 and P2 at low sensitivity.** At low sensitivity most missed cases are false negatives, and P1 and P2 have more than P3 because there are more CDI cases to miss, as suspected cases wait for their result on a general ward (see the note above): at 0% sensitivity, there are `r n0(gval("cum_total_infected_incidence", P1, max_sent, 0) - gval("cum_total_infected_incidence", P3, max_sent, 0))` more CDI cases per year under P1 and P2 than under P3. The share of results that are positive is the same under every policy (equal to the test sensitivity; see the note on test sensitivity in the introduction).
 - **Line plot: P3 compared with P1 at high sensitivity.** `r if (is.na(miss_cross_sens)) "P3 has fewer missed cases than P1 at every test sensitivity. The share of CDI cases missed untested (discharged or dying in I, plus the few dying in T3 under P3) is almost the same under every policy, as transfer time is not added to the case identification rate, so P3 keeps the advantage of fewer CDI cases even when false negatives are rare." else paste0("From ", pc(miss_cross_sens), " sensitivity, P3 has more missed cases than P1, as false negatives become rare.")`
-- **The difference plots.** The P3 vs P1 difference is most negative at `r pc(miss_trough_sens)` sensitivity (`r n0p(min(miss_gap$gap))` per year). As sensitivity rises, all three policies confirm more cases, the pool of false negatives shrinks for everyone and the differences narrow (`r n0p(miss_gap$gap[which.max(miss_gap$sens)])` per year at `r pc(max(miss_gap$sens))` sensitivity). At 0% coverage nobody is tested, so the differences are zero.
+- **The difference plots.** The P3 vs P1 difference is most negative at `r pc(miss_trough_sens)` sensitivity (`r n0p(min(miss_gap$gap))` per year). As sensitivity rises, all three policies confirm more cases, the pool of false negatives shrinks for everyone and the differences narrow (`r n0p(miss_gap$gap[which.max(miss_gap$sens)])` per year at `r pc(max(miss_gap$sens))` sensitivity). When 0% are sent for testing nobody is tested, so the differences are zero.
 
 ```{r}
 #| label: grid-plots-save
@@ -758,7 +754,7 @@ for (i in seq_len(nrow(tab_outcomes))) {
 
 ## 14) Change in outcomes due to increasing test sensitivity
 
-For each outcome compared across the grid in section 13 except 1c (a point prevalence, shown in section 13 only), the change from increasing test sensitivity from `sens_from` to `sens_to` (set below; both must be values in the grid), reported separately for each isolation policy (P1, P2 and P3), at the same testing coverage:
+For each outcome compared across the grid in section 13 except 1c (a point prevalence, shown in section 13 only), the change from increasing test sensitivity from `sens_from` to `sens_to` (set below; both must be values in the grid), reported separately for each isolation policy (P1, P2 and P3), at the same proportion of CDI cases sent for testing:
 
 > avoided = value at `sens_from` − value at `sens_to` (counts per year, and reductions in the prevalence differences and in specimens tested per confirmed case; a negative value is an increase)
 >
@@ -766,7 +762,7 @@ For each outcome compared across the grid in section 13 except 1c (a point preva
 >
 > change in the proportion of CDI cases confirmed (1d) or confirmed via retest (1e) = value at `sens_to` − value at `sens_from`, in percentage points
 
-The changes in total CDI cases (1a) and hospital-acquired CDI cases (2a) are identical (see the note in section 13). The outcomes reported are set by the `gain` column of `grid_outcome_spec`, and how each is reported by `sensitivity_gain_spec`, in `Scripts/Model1_ODE_Functions_T.R`. Each tab shows a table for 0%, 20%, 40%, 60%, 80% and 99% testing coverage, and a chart for every testing coverage value in the grid (0% to 99%). At 0% coverage nobody is tested, so nothing changes. All values are saved as `sensitivity_gain_<from>_to_<to>.csv`.
+The changes in total CDI cases (1a) and hospital-acquired CDI cases (2a) are identical (see the note in section 13). The outcomes reported are set by the `gain` column of `grid_outcome_spec`, and how each is reported by `sensitivity_gain_spec`, in `Scripts/Model1_ODE_Functions_T.R`. Each tab shows a table for 0%, 20%, 40%, 60%, 80% and 99% of CDI cases sent for testing, and a chart for every value in the grid (0% to 99%). When 0% are sent for testing nobody is tested, so nothing changes. All values are saved as `sensitivity_gain_<from>_to_<to>.csv`.
 
 ```{r}
 #| label: sensitivity-gain-save
@@ -809,12 +805,12 @@ for (i in seq_len(nrow(gain_plot_files))) {
 ```{r}
 #| label: gain-note-values
 #| include: false
-# Figures for the note below, per year at the highest coverage: change from sens_from to sens_to
+# Figures for the note below, per year at the highest proportion sent for testing: change from sens_from to sens_to
 # (negative = fewer)
-chg  <- function(var, pol) gval(var, pol, max_cov, sens_to) - gval(var, pol, max_cov, sens_from)
+chg  <- function(var, pol) gval(var, pol, max_sent, sens_to) - gval(var, pol, max_sent, sens_from)
 gain <- function(var, pol) {
   sensitivity_gain$gain[sensitivity_gain$outcome == var & sensitivity_gain$isolation_policy == pol &
-                          abs(sensitivity_gain$prop_I_suspected - max_cov) < 1e-6]
+                          abs(sensitivity_gain$prop_I_sent_for_testing - max_sent) < 1e-6]
 }
 pos_gain <- function(pol) pos_share(pol, sens_to) - pos_share(pol, sens_from)
 pp <- function(x) paste0("+", round(100 * x), " points")
@@ -828,13 +824,13 @@ gain_order <- function(var) {
 
 **How much improving test sensitivity helps depends on the isolation policy.**
 
-With the default parameters, improving test sensitivity avoids most hospital-acquired CDI cases under `r gain_order("cum_hospital_attributable_I")`, and most missed CDI cases under `r gain_order("cum_total_missed_cases")`. Better sensitivity mostly helps by giving fewer false negative results: fewer patients cycle between awaiting a result (Xtest) and false negatives on the ward (FN), and more are confirmed and treated sooner. The share of results that are positive equals the test sensitivity under every policy, so it rises by the same amount (`r pc(pos_share(P1, sens_from))` to `r pc(pos_share(P1, sens_to))`) under each; the differences between policies come from where each group of patients is cared for. The figures below are per year at `r pc(max_cov)` testing coverage, for an increase from `r pc(sens_from)` to `r pc(sens_to)` sensitivity.
+With the default parameters, improving test sensitivity avoids most hospital-acquired CDI cases under `r gain_order("cum_hospital_attributable_I")`, and most missed CDI cases under `r gain_order("cum_total_missed_cases")`. Better sensitivity mostly helps by giving fewer false negative results: fewer patients cycle between awaiting a result (Xtest) and false negatives on the ward (FN), and more are confirmed and treated sooner. The share of results that are positive equals the test sensitivity under every policy, so it rises by the same amount (`r pc(pos_share(P1, sens_from))` to `r pc(pos_share(P1, sens_to))`) under each; the differences between policies come from where each group of patients is cared for. The figures below are per year with `r pc(max_sent)` of CDI cases sent for testing, for an increase from `r pc(sens_from)` to `r pc(sens_to)` sensitivity.
 
 - **Hospital-acquired CDI cases avoided** (P1 `r n0(gain("cum_hospital_attributable_I", P1))`, P2 `r n0(gain("cum_hospital_attributable_I", P2))`, P3 `r n0(gain("cum_hospital_attributable_I", P3))`) follow the hospital-acquired colonisations avoided (P1 `r n0(-chg("cum_colonised_in_hospital", P1))`, P2 `r n0(-chg("cum_colonised_in_hospital", P2))`, P3 `r n0(-chg("cum_colonised_in_hospital", P3))`).
   - *P2*: suspected cases wait for their result on a general ward, so fewer retests mean fewer days in Xtest on the ward (colonisations from Xtest `r n0p(chg("cum_colonised_from_Xtest", P2))`) and as FN (`r n0p(chg("cum_colonised_from_FN", P2))`). The extra confirmed cases are isolated after a short wait on the ward (T1), so they add little transmission (colonisations from Xtreat `r n0p(chg("cum_colonised_from_Xtreat", P2))`, from T1 `r n0p(chg("cum_colonised_from_T1", P2))`).
   - *P1* gains as much as P2 from fewer days in Xtest (`r n0p(chg("cum_colonised_from_Xtest", P1))`) and as FN (`r n0p(chg("cum_colonised_from_FN", P1))`), but the extra confirmed cases are treated on a general ward and transmit at `betaXtreat`, adding `r n0(chg("cum_colonised_from_Xtreat", P1))` colonisations from Xtreat and offsetting much of the gain.
-  - *P3*: suspected cases are already isolated, so less time in Xtest saves little (`r n0p(chg("cum_colonised_from_Xtest", P3))`), and the gain comes mainly from fewer days as FN (`r n0p(chg("cum_colonised_from_FN", P3))`) and waiting on the ward for a side room before retesting (T3, `r n0p(chg("cum_colonised_from_T3", P3))`). P3 also starts from fewer cases (`r n0(gval("cum_hospital_attributable_I", P3, max_cov, sens_from))` hospital-acquired CDI cases per year at `r pc(sens_from)` sensitivity, against `r n0(gval("cum_hospital_attributable_I", P1, max_cov, sens_from))` under P1 and `r n0(gval("cum_hospital_attributable_I", P2, max_cov, sens_from))` under P2).
-- **Missed CDI cases avoided** (P1 `r n0(gain("cum_total_missed_cases", P1))`, P2 `r n0(gain("cum_total_missed_cases", P2))`, P3 `r n0(gain("cum_total_missed_cases", P3))`) are almost all false negatives discharged or dying in FN, T4 or T3 (P1 `r n0p(chg("cum_missed_false_negative_cases", P1))`, P2 `r n0p(chg("cum_missed_false_negative_cases", P2))`, P3 `r n0p(chg("cum_missed_false_negative_cases", P3))`). Missed untested cases (from I) barely change, as sensitivity does not affect who is tested. The amounts broadly follow the number of false negatives at risk at `r pc(sens_from)` sensitivity, and are similar under P2 and P3 (P1 `r n0(gval("cum_missed_false_negative_cases", P1, max_cov, sens_from))`, P2 `r n0(gval("cum_missed_false_negative_cases", P2, max_cov, sens_from))`, P3 `r n0(gval("cum_missed_false_negative_cases", P3, max_cov, sens_from))` per year).
+  - *P3*: suspected cases are already isolated, so less time in Xtest saves little (`r n0p(chg("cum_colonised_from_Xtest", P3))`), and the gain comes mainly from fewer days as FN (`r n0p(chg("cum_colonised_from_FN", P3))`) and waiting on the ward for a side room before retesting (T3, `r n0p(chg("cum_colonised_from_T3", P3))`). P3 also starts from fewer cases (`r n0(gval("cum_hospital_attributable_I", P3, max_sent, sens_from))` hospital-acquired CDI cases per year at `r pc(sens_from)` sensitivity, against `r n0(gval("cum_hospital_attributable_I", P1, max_sent, sens_from))` under P1 and `r n0(gval("cum_hospital_attributable_I", P2, max_sent, sens_from))` under P2).
+- **Missed CDI cases avoided** (P1 `r n0(gain("cum_total_missed_cases", P1))`, P2 `r n0(gain("cum_total_missed_cases", P2))`, P3 `r n0(gain("cum_total_missed_cases", P3))`) are almost all false negatives discharged or dying in FN, T4 or T3 (P1 `r n0p(chg("cum_missed_false_negative_cases", P1))`, P2 `r n0p(chg("cum_missed_false_negative_cases", P2))`, P3 `r n0p(chg("cum_missed_false_negative_cases", P3))`). Missed untested cases (from I) barely change, as sensitivity does not affect who is tested. The amounts broadly follow the number of false negatives at risk at `r pc(sens_from)` sensitivity, and are similar under P2 and P3 (P1 `r n0(gval("cum_missed_false_negative_cases", P1, max_sent, sens_from))`, P2 `r n0(gval("cum_missed_false_negative_cases", P2, max_sent, sens_from))`, P3 `r n0(gval("cum_missed_false_negative_cases", P3, max_sent, sens_from))` per year).
 
 In short, improving sensitivity matters most where suspected cases wait on a general ward and confirmed cases are isolated (P2). Where suspected cases are already isolated (P3), isolation already prevents much of the transmission that better sensitivity would avoid; where confirmed cases stay on a general ward (P1), the extra confirmed cases offset much of the gain.
 
