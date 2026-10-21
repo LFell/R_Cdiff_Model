@@ -218,7 +218,7 @@ R_Cdiff_Model/
 ├── Model4_OAT_Test.qmd                # One-at-a-time parameter test (verification)
 ├── render_run.R                       # render_run() / render_oat() for labelled runs
 ├── renv.lock, renv/, .Rprofile        # renv package library for this project
-├── Images/                            # Model diagrams used in the report
+├── Images/                            # Model diagram used in the report (sources in Not_in_repo/Images/)
 ├── Scripts/
 │   ├── Model4_Parameters.R            # Parameters and scenario builder
 │   └── Model4_Functions.R             # ODE, post-processing, scenario grid and plot functions
