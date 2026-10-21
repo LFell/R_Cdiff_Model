@@ -1,16 +1,13 @@
-# Model 1A ODE Functions - TRANSFER STATE TEST VERSION (_T) ####
+# Model 4 ODE Functions ####
 #
-# Test copy of Model1_ODE_Functions.R with five patient transfer states (see
-# Model1_ODE_Parameters_T.R), used by Model1_ODE_Model_Run_T.qmd and Model1_ODE_Transfer_Compare.qmd:
+# Functions for Model 4 of the hospital CDI case ascertainment and transmission model (git tag
+# model-4; see the model versions table in README.md), used by Model4_Run.qmd. Parameters are in
+# Model4_Parameters.R. Model 4 has five patient transfer states:
 #   T1 (P2): general ward, confirmed case awaiting transfer to a side room (from Xtest, to Xtreat)
 #   T2 (P2): side room, recovered and awaiting transfer back to the ward (from Xtreat, to S)
 #   T3 (P3): general ward, awaiting transfer to a side room for testing (from I or FN, to Xtest)
 #   T4 (P3): side room, false negative awaiting transfer back to the ward (from Xtest, to FN)
 #   T5 (P3): side room, recovered and awaiting transfer back to the ward (from Xtreat, to S)
-# Changes from the current version: the ODE function, side-room occupancy, flows (T1-T5 folded into
-# the existing outcome groups, as noted below), patient-days, stabilisation states, annual summary,
-# final outcomes, state plot data, the colour palette and labels (T1-T5) and the colonisations by
-# source plot. Grid functions and the other plot and summary functions are unchanged.
 #
 # How the transfer states enter the outcomes:
 #   - The specimen is taken on entry to Xtest, so under P3 tests are counted on leaving T3 (T3 ->
@@ -27,7 +24,7 @@
 
 # 1) Introduction ####
 
-# This script defines the ODE function for Model 1A, which is a compartmental model of hospital
+# This script defines the ODE function for Model 4, which is a compartmental model of hospital
 # transmission of a pathogen with the following states:
 
 # The model compartments are:
@@ -43,9 +40,8 @@
 # T1-T5: Patient transfer states (see the list at the top of this script)
 # D: Dead (cumulative count of deaths, absorbing state)
 
-# The parameters are defined in the accompanying script "Model1_ODE_Parameters_T.R". Together, these
-# scripts are used to run the model and generate outputs in Model1_ODE_Model_Run_T.qmd, and to
-# compare it with the current model in Model1_ODE_Transfer_Compare.qmd.
+# The parameters are defined in the accompanying script "Model4_Parameters.R". Together, these
+# scripts are used to run the model and generate outputs in Model4_Run.qmd.
 
 # ================================================================================================ #
 
@@ -78,7 +74,7 @@ validate_run_settings <- function(model_time, time_step, burn_in = 0) {
 
 # 3) ODE function ####
 
-Model1A_ODE <- function(time, state, parms) {
+model_ode <- function(time, state, parms) {
   with(as.list(c(state, parms)), {
     # a) Ensure non-negative state variables ####
     
@@ -458,7 +454,7 @@ run_scenario <- function(parms) {
   as.data.frame(ode(
     y = mod.init,
     times = mod.t,
-    func = Model1A_ODE,
+    func = model_ode,
     parms = parms
   ))
 }
@@ -2126,7 +2122,7 @@ run_scenario_grid <- function(grid, time_step, burn_in = 0, n_cores = 1) {
   }
 
   if (n_cores > 1) {
-    model_env <- environment(Model1A_ODE)
+    model_env <- environment(model_ode)
     cl <- parallel::makePSOCKcluster(n_cores)
     on.exit(parallel::stopCluster(cl), add = TRUE)
     parallel::clusterCall(cl, function(lib) {

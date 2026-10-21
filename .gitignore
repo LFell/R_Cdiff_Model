@@ -53,7 +53,10 @@ Not_in_repo/
 Outputs/
 
 # Quarto supporting files from non-self-contained renders (generated)
-Model1_ODE_Model_Run_files/
+*_files/
+
+# Intermediate files left by an interrupted Quarto render
+*.rmarkdown
 
 # Other file formats
 *.html

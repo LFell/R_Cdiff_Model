@@ -4,8 +4,8 @@ authors:
 - family-names: "Fellowes"
   given-names: "Laura"
   orcid: "To be added"
-title: "ODE Transmission model of hospital-onset C. difficile infection"
-version: 1.0.0
+title: "Hospital CDI case ascertainment and transmission model"
+version: "4.0.0"
 doi: None
-date-released: 2026-06-17
+date-released: 2026-10-21
 url: "https://github.com/LFell/R_Cdiff_Model"

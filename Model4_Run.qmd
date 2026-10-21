@@ -1,5 +1,5 @@
 ---
-title: "Hospital CDI case ascertainment ODE model"
+title: "Hospital CDI case ascertainment and transmission model"
 format:
   html:
     toc: true
@@ -15,9 +15,13 @@ params:
 
 ## Introduction
 
+This report runs **Model 4**; earlier versions are listed in the model versions table in `README.md`.
+
 This script runs an ODE model for case ascertainment, which simulates testing for, and the transmission dynamics of a healthcare-associated pathogen within a hospital setting. The model structure and parameters are specified to track the flow of patients through states of colonisation and infection with toxigenic *C. difficile*, as well as the impact of testing and isolation practices on case detection, missed cases and consequent transmission of *C. difficile* among hospital patients. It does not model testing of symptomatic patients whose symptoms are not caused by *C. difficile*, or asymptomatic patients.
 
-![](Images/261021 P1-P3 combined .png) The main model compartments are:\
+![](Images/261021 P1-P3 combined.png)
+
+The main model compartments are:\
 - **S (Susceptible)**: Not colonised or infected\
 - **C (Colonised)**: Carrying the pathogen but not infected\
 - **I (Infected)**: Showing symptoms caused by the pathogen\
@@ -46,9 +50,9 @@ T1 and T3 transmit at `betaI` on a general ward, T4 at `betaI * beta_mult_isolat
 - **prop_I_sent_for_testing**: Proportion of CDI cases sent for testing (must be below 100%).\
 - **test_sens**: Sensitivity of the diagnostic testing algorithm.
 
-Test turnaround time (`t_test_turnaround`) is a fixed parameter in `Scripts/Model1_ODE_Parameters_T.R`, but could be set as a control variable if different testing algorithms are expected to have different turnaround times.
+Test turnaround time (`t_test_turnaround`) is a fixed parameter in `Scripts/Model4_Parameters.R`, but could be set as a control variable if different testing algorithms are expected to have different turnaround times.
 
-**Scenarios modelled.** This quarto document uses the ODE function defined in "Model1_ODE_Functions_T.R" and the parameter sets defined in "Model1_ODE_Parameters_T.R" to run a grid of scenarios covering every combination of the control variables, and generates outputs including outcomes for every scenario (annual totals after a burn-in period), plots comparing the isolation policies across the proportion of CDI cases sent for testing and test sensitivity, rates per 10,000 patient bed-days, and time series, stabilisation checks and annual summaries for a small set of example scenarios. The outputs are saved as CSV files in a labelled subdirectory of `Outputs/Transfer_states/` and key results are also presented in tables and plots.
+**Scenarios modelled.** This quarto document uses the ODE function defined in "Scripts/Model4_Functions.R" and the parameter sets defined in "Scripts/Model4_Parameters.R" to run a grid of scenarios covering every combination of the control variables, and generates outputs including outcomes for every scenario (annual totals after a burn-in period), plots comparing the isolation policies across the proportion of CDI cases sent for testing and test sensitivity, rates per 10,000 patient bed-days, and time series, stabilisation checks and annual summaries for a small set of example scenarios. The outputs are saved as CSV files in a labelled subdirectory of `Outputs/Model4/` and key results are also presented in tables and plots.
 
 **Note on the proportion of CDI cases sent for testing.** `prop_I_sent_for_testing` is the proportion of CDI cases sent for testing: the share of patients entering I who are identified as suspected cases before they are discharged or die. Identification competes with discharge and death from I, so `prop_I_sent_for_testing = gamma / (gamma + disI + mortI)`, and the model sets the case identification rate as `gamma = prop_I_sent_for_testing * (disI + mortI) / (1 - prop_I_sent_for_testing)`. Patients move at this rate from I to Xtest, or under P3 to T3 (awaiting a side room) and then to Xtest. It must be below 100%, as `gamma` would be infinite at 100%, so the highest value in the grid is 99%. The mean time in I before identification, `1 / (gamma + disI + mortI)`, is therefore longer when fewer cases are sent for testing: with the default parameters, about 9 days at 33%, 7 days at 50% and 1.4 days at 90%. The baseline value is set from the share of hospital-onset diarrhoea patients who had ever been tested for CDI during their stay in a point-prevalence study (Mawer et al. 2019, doi 10.1016/j.jhin.2019.05.001). That is a share of *current* cases, not of all incident cases, so the model also reports its own point-prevalence equivalent (the share of current CDI cases who have ever been tested) for comparison; see table in section 12 and plot in section 13. Plots and tables label this control variable "Proportion of CDI cases sent for testing".
 
@@ -63,7 +67,7 @@ Neither rate includes transfer time, so the share of results that are positive, 
 
 ### Model assumptions
 
-Default parameter values are given in brackets; they are set in `Scripts/Model1_ODE_Parameters_T.R`.
+Default parameter values are given in brackets; they are set in `Scripts/Model4_Parameters.R`.
 
 **Pathogen and population**
 
@@ -138,7 +142,7 @@ library(scales)
 library(cowplot)
 library(dplyr)
 options(scipen = 1000)
-output_dir <- file.path("Outputs", "Transfer_states", params$run_label)
+output_dir <- file.path("Outputs", "Model4", params$run_label)
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 grid_clear_cache <- FALSE
@@ -151,8 +155,8 @@ Source the ODE functions and parameter sets for the model. The functions include
 ```{r}
 #| label: source-parameters-and-functions
 
-source("Scripts/Model1_ODE_Functions_T.R")
-source("Scripts/Model1_ODE_Parameters_T.R")
+source("Scripts/Model4_Functions.R")
+source("Scripts/Model4_Parameters.R")
 ```
 
 ## 3) Set values for control variables
@@ -219,7 +223,7 @@ mod.t      <- seq(0, model_time, by = time_step)
 
 ## 5) Initial conditions
 
-Set the initial conditions for the model states (S, C, I, Xtest, FN, Xtreat, the transfer states T1-T5, and D) at time 0. These values represent the starting point of the simulation and can be adjusted as needed for different scenarios or sensitivity analyses. The order must match the order of the derivatives returned by the ODE function (`Model1A_ODE()` in `Scripts/Model1_ODE_Functions_T.R`).
+Set the initial conditions for the model states (S, C, I, Xtest, FN, Xtreat, the transfer states T1-T5, and D) at time 0. These values represent the starting point of the simulation and can be adjusted as needed for different scenarios or sensitivity analyses. The order must match the order of the derivatives returned by the ODE function (`model_ode()` in `Scripts/Model4_Functions.R`).
 
 ```{r}
 #| label: initial-conditions
@@ -276,7 +280,7 @@ grid_cache_key <- list(
   fixed         = fixed,
   run_settings  = run_settings,
   mod.init      = mod.init,
-  code          = lapply(list(Model1A_ODE, make_mod_parms, prob2rate, validate_fixed_parameters,
+  code          = lapply(list(model_ode, make_mod_parms, prob2rate, validate_fixed_parameters,
                               validate_scenario_inputs, validate_rate_parameters, run_scenario,
                               run_scenario_grid, add_quantities, make_final_outcomes,
                               calculate_total_patient_days, stabilisation_summary,
@@ -653,7 +657,7 @@ knitr::kable(
 
 ## 13) Outcomes by proportion of CDI cases sent for testing and test sensitivity
 
-Compare the three isolation policies across every combination of proportion of CDI cases sent for testing and test sensitivity in the grid, for the research question outcomes 1a, 1b, 1c, 1d (proportion), 1e (proportion), 2a, 2b, 3a, 3c, 3e and 3f (set by the `plot` column of `grid_outcome_spec` in `Scripts/Model1_ODE_Functions_T.R`). Counts are annual totals over the analysis period (the `r analysis_years`-year total after a `r burn_in`-day burn-in, divided by `r analysis_years`); proportions and prevalence differences are over the whole analysis period. The other research question outcomes are tabulated in section 12 and saved in `final_outcomes_all.csv`.
+Compare the three isolation policies across every combination of proportion of CDI cases sent for testing and test sensitivity in the grid, for the research question outcomes 1a, 1b, 1c, 1d (proportion), 1e (proportion), 2a, 2b, 3a, 3c, 3e and 3f (set by the `plot` column of `grid_outcome_spec` in `Scripts/Model4_Functions.R`). Counts are annual totals over the analysis period (the `r analysis_years`-year total after a `r burn_in`-day burn-in, divided by `r analysis_years`); proportions and prevalence differences are over the whole analysis period. The other research question outcomes are tabulated in section 12 and saved in `final_outcomes_all.csv`.
 
 **Note on total and hospital-acquired CDI cases.** Differences in total CDI cases (1a) between scenarios are driven entirely by differences in hospital-acquired CDI cases (2a), so the difference plots for 1a and 2a are identical. Admissions arrive at a fixed rate, so patients admitted with CDI (`r scales::comma(round(grid_results_annual$cum_admitted_infected[1]))` per year) and patients admitted colonised are the same in every scenario. Testing and isolation act only on infected patients, so they do not change how colonised patients progress, lose colonisation or leave hospital, and progressions to CDI among patients admitted colonised are also the same in every scenario (`r scales::comma(round(grid_results_annual$cum_infected_in_hospital[1] - grid_results_annual$cum_hospital_attributable_I[1]))` per year). Total and hospital-onset CDI cases therefore differ from hospital-acquired CDI cases by a constant.
 
@@ -762,7 +766,7 @@ For each outcome compared across the grid in section 13 except 1c (a point preva
 >
 > change in the proportion of CDI cases confirmed (1d) or confirmed via retest (1e) = value at `sens_to` − value at `sens_from`, in percentage points
 
-The changes in total CDI cases (1a) and hospital-acquired CDI cases (2a) are identical (see the note in section 13). The outcomes reported are set by the `gain` column of `grid_outcome_spec`, and how each is reported by `sensitivity_gain_spec`, in `Scripts/Model1_ODE_Functions_T.R`. Each tab shows a table for 0%, 20%, 40%, 60%, 80% and 99% of CDI cases sent for testing, and a chart for every value in the grid (0% to 99%). When 0% are sent for testing nobody is tested, so nothing changes. All values are saved as `sensitivity_gain_<from>_to_<to>.csv`.
+The changes in total CDI cases (1a) and hospital-acquired CDI cases (2a) are identical (see the note in section 13). The outcomes reported are set by the `gain` column of `grid_outcome_spec`, and how each is reported by `sensitivity_gain_spec`, in `Scripts/Model4_Functions.R`. Each tab shows a table for 0%, 20%, 40%, 60%, 80% and 99% of CDI cases sent for testing, and a chart for every value in the grid (0% to 99%). When 0% are sent for testing nobody is tested, so nothing changes. All values are saved as `sensitivity_gain_<from>_to_<to>.csv`.
 
 ```{r}
 #| label: sensitivity-gain-save
