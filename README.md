@@ -46,7 +46,7 @@ Renamed copies of the Model 2 and Model 3 documents and scripts (e.g.
 locally in `Not_in_repo/Old_scripts/Model2/` and `Model3/` for
 reference, and their rendered reports in `Not_in_repo/Old_outputs/`.
 These copies do not run from there; use the git tags. The OAT test has
-not yet been ported to Model 4.
+been ported to Model 4 (`Model4_OAT_Test.qmd`).
 
 ------------------------------------------------------------------------
 
@@ -215,7 +215,8 @@ are computed in post-processing.
 ```         
 R_Cdiff_Model/
 ├── Model4_Run.qmd                     # Main analysis document (Model 4)
-├── render_run.R                       # render_run() for labelled runs
+├── Model4_OAT_Test.qmd                # One-at-a-time parameter test (verification)
+├── render_run.R                       # render_run() / render_oat() for labelled runs
 ├── renv.lock, renv/, .Rprofile        # renv package library for this project
 ├── Images/                            # Model diagrams used in the report
 ├── Scripts/
@@ -223,7 +224,8 @@ R_Cdiff_Model/
 │   └── Model4_Functions.R             # ODE, post-processing, scenario grid and plot functions
 ├── Outputs/                           # (git-ignored)
 │   └── Model4/
-│       └── <run_label>/               # One folder per labelled model run
+│       ├── <run_label>/               # One folder per labelled model run
+│       └── OAT/<run_label>/           # One folder per labelled OAT run
 └── Not_in_repo/                       # (git-ignored) filed copies of earlier models, old outputs
 ```
 
@@ -280,14 +282,44 @@ Defines:
   `plot_discharges_by_state_area_noS()`, `plot_case_outcomes_bar()`,
   `plot_bed_days_bar()`, `plot_scenario_params()`.
 
-### One-at-a-time (OAT) parameter test
+### `Model4_OAT_Test.qmd`
 
-Model 2 had a standalone verification document (`Model1_ODE_OAT_Run.qmd`
-at tag `model-2`; filed locally as `Model2_OAT_Test.qmd`) that varied
-each fixed parameter one at a time and checked that the outcomes moved
-in the theoretically expected direction under each isolation policy. It
-uses Model 2's parameters, so it does not run against Model 4; porting
-it to Model 4 is a planned next step.
+A standalone model verification document — **not for analysis**. Runs a
+systematic one-at-a-time (OAT) sensitivity test to confirm that Model 4
+responds in the expected direction when each fixed parameter is varied
+individually, with all others held at their defaults. Render it with
+`render_oat("<label>")` (see **Run instructions**); the HTML report shows
+the pass/fail counts, any failed tests and the plots. It is ported from
+the Model 2 test (`Model1_ODE_OAT_Run.qmd` at tag `model-2`); the
+introduction of the report lists what changed.
+
+**What it tests:** each of the 26 fixed parameters in
+`Scripts/Model4_Parameters.R` (the render stops if any fixed parameter
+has no specification) is run at a low and a high value, at 50% of CDI
+cases sent for testing and 50% test sensitivity (so the untested,
+false-negative and retesting pathways are all active), under each of the
+three isolation policies.
+
+- `low`: 0 for proportions and transmission parameters valid at 0; a
+  small positive value for parameters that must be \> 0; 1.0 for
+  `abx_mult` (no antibiotic effect); 0.1 × baseline for `adm_rate`.
+- `high`: 1 for proportions, 5 × baseline for all other parameters.
+
+**Outputs assessed (high vs low):** steady-state I (`ss_I`), annual
+confirmed cases and annual missed cases (last complete year). Each has
+an expected direction (`"increases"`, `"decreases"`, `"unchanged"` or
+`"complex"`), with a 1% tolerance; `"complex"` marks theoretically
+ambiguous directions, flagged for manual inspection rather than
+auto-assessed. `oat_specs` gives the expectations for
+`"suspected_and_confirmed"`, and `oat_specs_policy` overrides them where
+they differ by policy. The % change in each Section 13 outcome
+(`grid_outcome_spec`) is also reported, without expected directions.
+
+**Files produced** (in `Outputs/Model4/OAT/<run_label>/`):
+`oat_specs.csv`, `oat_specs_policy_overrides.csv`, `oat_results.csv`
+(pass/fail per parameter × policy), `oat_outcomes_pct_change.csv`,
+`combined_oat_plot.png` (tornado charts for the three checked outputs
+and a pass/fail heatmap) and `oat_tornado_cumulative_outcomes_<n>.png`.
 
 ### `Model4_Run.qmd`
 
@@ -325,8 +357,8 @@ Accepts a `run_label` parameter (see **Run instructions** below).
 
 Utility script for rendering with a labelled output folder. Source this
 file by calling `source("render_run.R")`, then call `render_run("A")`
-from the R console. It renders `Model4_Run.qmd` only; earlier models are
-run from their git tags.
+(main model run) or `render_oat("A")` (OAT parameter test) from the R
+console. Earlier models are run from their git tags.
 
 ------------------------------------------------------------------------
 
@@ -381,6 +413,19 @@ moved or shared on its own (about 10 MB).
 To run a second set of scenarios, edit the scenario values again and
 call `render_run("B")`, and so on. The `run_label` in the QMD YAML does
 not need to be changed — `render_run()` overrides it.
+
+### OAT parameter test
+
+``` r
+source("render_run.R")
+render_oat("20261021")
+```
+
+This renders `Model4_OAT_Test.qmd`, saves its CSVs and plots to
+`Outputs/Model4/OAT/20261021/` and produces
+`20261021_Model4_OAT_Test.html` in the project root. As with
+`render_run()`, re-using a label overwrites that run. Re-run it after
+any change to the model structure or the fixed parameters.
 
 ### Interactive rendering (quick checks)
 
