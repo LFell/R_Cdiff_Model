@@ -4,8 +4,8 @@
 # model-4; see the model versions table in README.md), used by Model4_Run.qmd. Moves between a
 # general ward and a side room pass through patient transfer states (T1-T5), left at rate
 # tau = 1 / t_patient_transfer, so transfer time is not added to any other rate (Model 2 added it
-# to the rate denominators). gamma is set from the proportion of CDI cases sent for testing
-# (prop_I_sent_for_testing; see make_mod_parms()).
+# to the rate denominators). gamma = 1 / t_wait_test, the mean time from CDI symptom onset to being
+# sent for testing if not discharged or dead first (see make_mod_parms()).
 # Transfer states used by each policy (numbered as on the model diagrams):
 #   T1 (P2): general ward, confirmed case awaiting a side room for treatment (Xtest -> T1 -> Xtreat)
 #   T2 (P2): side room, recovered, awaiting return to the ward (Xtreat -> T2 -> S)
@@ -126,7 +126,7 @@ validate_fixed_parameters <- function(adm_rate,
 
 ## d) Function to validate scenario control parameters ####
 validate_scenario_inputs <- function(isolation_policy,
-                                     prop_I_sent_for_testing,
+                                     t_wait_test,
                                      test_sens,
                                      scenario_label = NA_character_,
                                      verbose = TRUE) {
@@ -144,11 +144,10 @@ validate_scenario_inputs <- function(isolation_policy,
          paste(isolation_levels, collapse = ", "), ".")
   }
   
-  # ---- Must be in [0,1) (gamma would be infinite at 1; see make_mod_parms()) ----
-  if (!is.numeric(prop_I_sent_for_testing) ||
-      length(prop_I_sent_for_testing) != 1 || is.na(prop_I_sent_for_testing) ||
-      prop_I_sent_for_testing < 0 || prop_I_sent_for_testing >= 1) {
-    stop(nm, "prop_I_sent_for_testing must be a single numeric value in [0,1).")
+  # ---- Must be > 0 (days; Inf = no testing) ----
+  if (!is.numeric(t_wait_test) ||
+      length(t_wait_test) != 1 || is.na(t_wait_test) || t_wait_test <= 0) {
+    stop(nm, "t_wait_test must be a single numeric value > 0 (days; Inf for no testing).")
   }
 
   # ---- Must be in [0,1] ----
@@ -299,7 +298,7 @@ fixed <- list(
   t_patient_transfer = 0.5,
   
   # Time from test administration to result (days). Fixed across scenarios; scenarios vary
-  # isolation_policy, prop_I_sent_for_testing and test_sens.
+  # isolation_policy, t_wait_test and test_sens.
   t_test_turnaround = 2.0,
 
   # Time from FN result to retest
@@ -356,7 +355,7 @@ make_mod_parms <- function(
     # ---- Scenario-specific parameters (must always be supplied) ----
     # isolation_policy: "none", "confirmed" or "suspected_and_confirmed"
     isolation_policy,
-    prop_I_sent_for_testing,
+    t_wait_test,
     test_sens,
     # scenario_label: optional name used in validation messages and saved with the parameters.
     # The scenario grid supplies it automatically (e.g. "P2_confirmed_test050_sens100").
@@ -460,7 +459,7 @@ make_mod_parms <- function(
   # c) Validate scenario-specific parameters ####
   validate_scenario_inputs(
     isolation_policy    = isolation_policy,
-    prop_I_sent_for_testing    = prop_I_sent_for_testing,
+    t_wait_test        = t_wait_test,
     test_sens           = test_sens,
     scenario_label      = scenario_label
   )
@@ -579,19 +578,18 @@ make_mod_parms <- function(
 
   # Rate of identification of suspected cases (I -> Xtest, or I -> T3 under P3)
 
-  # prop_I_sent_for_testing is the proportion of CDI cases sent for testing: the share of patients entering
-  # I who are identified as suspected cases before they are discharged or die. Identification
-  # competes with discharge and death from I, so prop_I_sent_for_testing = gamma / (gamma + disI + mortI),
-  # which gives gamma = prop_I_sent_for_testing * (disI + mortI) / (1 - prop_I_sent_for_testing). gamma is infinite
-  # at prop_I_sent_for_testing = 1, so it must be < 1. The baseline value is set from the "ever tested"
-  # share of hospital-onset diarrhoea patients in Mawer et al. (2019, doi 10.1016/j.jhin.2019.05.001).
-  # A consequence is that the mean time in I before identification, 1 / (gamma + disI + mortI), is
-  # longer when fewer are sent for testing (about 9 days at 33% and 7 days at 50%, with the default parameters).
-  # transfer time is never added to gamma, theta, pi or sigma; under P3
+  # t_wait_test is the mean time (days) from CDI symptom onset (entry to I) to being sent for testing,
+  # if the patient is not discharged and does not die first: gamma = 1 / t_wait_test. Inf means no
+  # testing (gamma = 0). Identification competes with discharge and death from I, so these are
+  # outputs: the daily probability that an untested case is sent for testing, 1 - exp(-gamma); the
+  # share of CDI cases ever sent for testing, gamma / (gamma + disI + mortI) (prop_sent_for_testing);
+  # the mean time to being sent for testing among the cases sent, 1 / (gamma + disI + mortI); and the
+  # share of current CDI cases who have ever been tested (outcome 1c, prop_current_CDI_tested).
+  # Transfer time is never added to gamma, theta, pi or sigma; under P3
   # identified (I) and retested (FN) patients pass through T3, and false negatives through T4. The
   # share of results that are positive, theta / (theta + pi), therefore equals test_sens under
   # every policy.
-  gamma <- prop_I_sent_for_testing * (disI + mortI) / (1 - prop_I_sent_for_testing)
+  gamma <- if (is.infinite(t_wait_test)) 0 else 1 / t_wait_test
 
   # Rate of confirmation of true positives (Xtest -> Xtreat, or Xtest -> T1 under P2)
   theta <- test_sens / t_test_turnaround
@@ -630,7 +628,7 @@ make_mod_parms <- function(
     # Scenario controls
     scenario_label       = scenario_label,
     isolation_policy     = isolation_policy,
-    prop_I_sent_for_testing     = prop_I_sent_for_testing,
+    t_wait_test         = t_wait_test,
     test_sens            = test_sens,
 
     # Fixed test turnaround time (reported for reference; enters the model via theta and pi)

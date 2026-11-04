@@ -17,12 +17,11 @@ params:
 
 This document runs a systematic one-at-a-time (OAT) sensitivity test to verify that **Model 4** (`Scripts/Model4_Functions.R`, `Scripts/Model4_Parameters.R`) responds in the expected direction when each parameter is varied individually, with all others held at their scenario/fixed defaults. It is ported from the Model 2 OAT test (git tag `model-2`); the changes in expectations are listed below.
 
-For each parameter, the model is run at two values (low and high) at a single baseline of test settings (50% of CDI cases sent for testing, 50% test sensitivity, so that untested, false-negative and retesting pathways are all active) under each of the three isolation policies: `"none"`, `"confirmed"` and `"suspected_and_confirmed"`. The proportion of CDI cases sent for testing (`prop_I_sent_for_testing`) and test sensitivity are not tested here, as the scenario grid in `Model4_Run.qmd` covers their full range.
+For each parameter, the model is run at two values (low and high) at a single baseline of test settings (a mean time to testing if not discharged or dead first of 14 days, so that about 50% of CDI cases are sent for testing with the default parameters, and 50% test sensitivity, so that untested, false-negative and retesting pathways are all active) under each of the three isolation policies: `"none"`, `"confirmed"` and `"suspected_and_confirmed"`. The mean time to testing (`t_wait_test`) and test sensitivity are not tested here, as the scenario grid in `Model4_Run.qmd` covers their full range.
 
 **Changes from the Model 2 test.**
 
-- `t_identify_suspected` is no longer a parameter: `gamma` is set from `prop_I_sent_for_testing`, `disI` and `mortI` (`gamma = prop_I_sent_for_testing * (disI + mortI) / (1 - prop_I_sent_for_testing)`).
-- Because `gamma` now depends on `disI` and `mortI`, the share of CDI cases leaving I untested is fixed at `1 - prop_I_sent_for_testing` whatever the length of stay or mortality. A longer `losI` therefore no longer reduces the share of cases missed untested (Model 2 expected missed cases to fall); it slows every exit from I, so more patients are in I and transmitting.
+- `t_identify_suspected` is now the scenario control `t_wait_test` (mean time to testing if not discharged or dead first, `gamma = 1 / t_wait_test`), so it is not tested here; `gamma` does not depend on `disI` or `mortI`. As in Model 2, a longer `losI` therefore leaves more time for identification, so the share of cases missed untested falls.
 - Patient transfer time enters only through the transfer states (T1–T5, rate `tau = 1 / t_patient_transfer`), not through `gamma`, `pi`, `sigma` or `delta`. A longer transfer keeps confirmed cases (T1, P2) and suspected cases (T3, P3) on a general ward for longer, transmitting at `betaI`.
 - Three fixed parameters not tested in Model 2 are added: the admission rate (`adm_rate`), the length of stay of false negatives (`losFN`) and the time to retest after a false negative (`t_wait_retest`). A check stops the render if any fixed parameter is missing from the specifications.
 - The baseline column now matches the fixed list for `mortI_mult` (3) and `mortXtreat_mult` (1.5); high = 5 × baseline. The test specifications record a third reference column (baseline) for documentation, but model runs are only performed at low and high.
@@ -77,7 +76,7 @@ mod.init <- c(S = 909, C = 86, I = 5, Xtest = 0, FN = 0, Xtreat = 0,
               T1 = 0, T2 = 0, T3 = 0, T4 = 0, T5 = 0, D = 0)
 
 # Scenarios: baseline test settings under each isolation policy, named by policy
-oat_baseline <- list(prop_I_sent_for_testing = 0.50, test_sens = 0.50)
+oat_baseline <- list(t_wait_test = 14, test_sens = 0.50)
 
 scenarios <- map(isolation_policy_levels,
                  \(pol) c(list(isolation_policy = pol), oat_baseline)) |>
@@ -89,7 +88,7 @@ scenarios <- map(isolation_policy_levels,
 Runs the model for a single set of parameter values under a given scenario.
 
 - `overrides`: a named list of parameters to override. Any parameter accepted by `make_mod_parms()` can be overridden (fixed or scenario-level). All others default to the values in `scenario` plus the fixed list.
-- `scenario`: a named list of scenario control parameters with elements `isolation_policy`, `prop_I_sent_for_testing`, `test_sens`. Defaults to the suspected_and_confirmed policy at the baseline test settings.
+- `scenario`: a named list of scenario control parameters with elements `isolation_policy`, `t_wait_test`, `test_sens`. Defaults to the suspected_and_confirmed policy at the baseline test settings.
 
 Returns a one-row tibble of summary statistics, plus the cumulative outcomes in `grid_outcome_spec` (totals over the whole run).
 
@@ -115,6 +114,8 @@ run_with_overrides <- function(overrides = list(), scenario = scenarios$suspecte
   cum_outcomes <- make_final_outcomes(list(oat_test = result)) |>
     bind_cols(calculate_total_patient_days(result)) |>
     add_derived_outcomes() |>
+    mutate(mean_wait_test      = mean_wait_to_state(parms, "Xtest"),
+           mean_wait_treatment = mean_wait_to_state(parms, "Xtreat")) |>
     select(all_of(grid_outcome_spec$variable))
 
   tibble(
@@ -194,7 +195,7 @@ oat_specs <- tribble(
   # --- Length of stay ---
   "losS",                    1.00,    7.00,       35.00,   "complex",    "complex",          "complex",       "Longer S LOS: lower throughput vs longer exposure time; net effect unclear. Low > 0 required",
   "losC",                    1.00,    7.00,       35.00,   "increases",  "increases",        "increases",     "Longer C LOS -> more C in hospital at any time -> more I. Low > 0 required",
-  "losI",                    1.00,    14.00,      70.00,   "increases",  "increases",        "increases",     "Longer I LOS -> lower disI. gamma is set so that the share of I sent for testing is fixed (prop_I_sent_for_testing), so gamma falls with disI and every exit from I slows -> more I in hospital, transmitting -> more CDI. The untested share of cases is unchanged, so missed cases rise with incidence (Model 2 expected them to fall). Low > 0 required",
+  "losI",                    1.00,    14.00,      70.00,   "increases",  "increases",        "complex",       "Longer I LOS -> lower disI -> more I in hospital, transmitting -> more CDI. gamma does not depend on disI, so more cases are identified before discharge -> more confirmed cases, and the share missed untested falls. Missed cases: lower untested share vs more CDI, so complex. Low > 0 required",
   "losFN",                   1.00,    14.00,      70.00,   "increases",  "increases",        "decreases",     "Longer FN LOS -> fewer false negatives discharged before retesting -> fewer missed FN cases and more retests confirmed; FN stay on the ward longer, transmitting -> more I. Low > 0 required",
   "losXtreat",               1.00,    14.00,      70.00,   "complex",    "complex",          "complex",       "Longer Xtreat LOS -> more Xtreat occupancy -> more betaXtreat transmission -> more I (detectable when test_sens = 1). At the 50% sensitivity baseline FN transmission dominates and dilutes the betaXtreat effect below the 1% threshold. Note: confirmed_cases = theta*Xtest (inflow), not outflow. Low > 0 required",
 
@@ -204,7 +205,7 @@ oat_specs <- tribble(
 
   # --- Mortality ---
   "prob_mort_S",             0,       0.001,      0.005,   "complex",    "complex",          "complex",       "Higher S mortality -> more exits from S -> more admissions needed; small indirect effect on C and I",
-  "mortI_mult",              0,       3.00,       15.00,   "complex",    "complex",          "complex",       "Higher mortality of untreated CDI patients (I, Xtest, FN, T1, T3, T4). gamma rises with mortI so the share of I sent for testing is fixed; mortI is small relative to disI, so effects are near the 1% threshold",
+  "mortI_mult",              0,       3.00,       15.00,   "complex",    "complex",          "complex",       "Higher mortality of untreated CDI patients (I, Xtest, FN, T1, T3, T4) -> slightly fewer identified before death. mortI is small relative to disI, so effects are near the 1% threshold",
   "mortXtreat_mult",         0,       1.50,       7.50,    "complex",    "complex",          "complex",       "Higher Xtreat mortality multiplier -> lower Xtreat; small indirect effect on I",
 
   # --- Retesting after a false negative ---
@@ -370,7 +371,7 @@ n_complex <- sum(oat_grid$exp_ss_I == "complex" |
 failures <- oat_summary |> filter(!overall_pass)
 ```
 
-Baseline settings: `r percent(oat_baseline$prop_I_sent_for_testing)` of CDI cases sent for testing and `r percent(oat_baseline$test_sens)` test sensitivity, under all isolation policies. Parameters tested: `r n_params`; total model runs: `r nrow(oat_assessed) * 2`.
+Baseline settings: a mean time to testing if not discharged or dead first of `r oat_baseline$t_wait_test` days and `r percent(oat_baseline$test_sens)` test sensitivity, under all isolation policies. Parameters tested: `r n_params`; total model runs: `r nrow(oat_assessed) * 2`.
 
 - **PASS:** `r n_pass` of `r nrow(oat_summary)` parameter × policy tests
 - **FAIL:** `r n_fail` of `r nrow(oat_summary)`
@@ -411,7 +412,7 @@ fig_width_cm  <- 15.92
 fig_height_cm <- 23.36
 
 oat_subtitle <- paste0("Each parameter varied individually at ",
-                       percent(oat_baseline$prop_I_sent_for_testing), " of CDI cases sent for testing and ",
+                       oat_baseline$t_wait_test, "-day mean time to testing and ",
                        percent(oat_baseline$test_sens), " test sensitivity")
 
 # Descriptive labels for the parameters on the y axis
