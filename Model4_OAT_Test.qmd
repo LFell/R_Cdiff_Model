@@ -17,11 +17,11 @@ params:
 
 This document runs a systematic one-at-a-time (OAT) sensitivity test to verify that **Model 4** (`Scripts/Model4_Functions.R`, `Scripts/Model4_Parameters.R`) responds in the expected direction when each parameter is varied individually, with all others held at their scenario/fixed defaults. It is ported from the Model 2 OAT test (git tag `model-2`); the changes in expectations are listed below.
 
-For each parameter, the model is run at two values (low and high) at a single baseline of test settings (a mean time to testing if not discharged or dead first of 14 days, so that about 50% of CDI cases are sent for testing with the default parameters, and 50% test sensitivity, so that untested, false-negative and retesting pathways are all active) under each of the three isolation policies: `"none"`, `"confirmed"` and `"suspected_and_confirmed"`. The mean time to testing (`t_wait_test`) and test sensitivity are not tested here, as the scenario grid in `Model4_Run.qmd` covers their full range.
+For each parameter, the model is run at two values (low and high) at a single baseline of test settings (a daily probability of 0.07 that an untested CDI case is sent for testing, so that about 50% of CDI cases are sent for testing with the default parameters, and 50% test sensitivity, so that untested, false-negative and retesting pathways are all active) under each of the three isolation policies: `"none"`, `"confirmed"` and `"suspected_and_confirmed"`. The daily probability of testing (`prob_test_daily`) and test sensitivity are not tested here, as the scenario grid in `Model4_Run.qmd` covers their full range.
 
 **Changes from the Model 2 test.**
 
-- `t_identify_suspected` is now the scenario control `t_wait_test` (mean time to testing if not discharged or dead first, `gamma = 1 / t_wait_test`), so it is not tested here; `gamma` does not depend on `disI` or `mortI`. As in Model 2, a longer `losI` therefore leaves more time for identification, so the share of cases missed untested falls.
+- `t_identify_suspected` is no longer a parameter: `gamma` is set from the scenario control `prob_test_daily` (the daily probability that an untested CDI case is sent for testing, `gamma = -log(1 - prob_test_daily)`), so it is not tested here; `gamma` does not depend on `disI` or `mortI`. As in Model 2, a longer `losI` therefore leaves more time for identification, so the share of cases missed untested falls.
 - Patient transfer time enters only through the transfer states (T1–T5, rate `tau = 1 / t_patient_transfer`), not through `gamma`, `pi`, `sigma` or `delta`. A longer transfer keeps confirmed cases (T1, P2) and suspected cases (T3, P3) on a general ward for longer, transmitting at `betaI`.
 - Three fixed parameters not tested in Model 2 are added: the admission rate (`adm_rate`), the length of stay of false negatives (`losFN`) and the time to retest after a false negative (`t_wait_retest`). A check stops the render if any fixed parameter is missing from the specifications.
 - The baseline column now matches the fixed list for `mortI_mult` (3) and `mortXtreat_mult` (1.5); high = 5 × baseline. The test specifications record a third reference column (baseline) for documentation, but model runs are only performed at low and high.
@@ -76,7 +76,7 @@ mod.init <- c(S = 909, C = 86, I = 5, Xtest = 0, FN = 0, Xtreat = 0,
               T1 = 0, T2 = 0, T3 = 0, T4 = 0, T5 = 0, D = 0)
 
 # Scenarios: baseline test settings under each isolation policy, named by policy
-oat_baseline <- list(t_wait_test = 14, test_sens = 0.50)
+oat_baseline <- list(prob_test_daily = 0.07, test_sens = 0.50)
 
 scenarios <- map(isolation_policy_levels,
                  \(pol) c(list(isolation_policy = pol), oat_baseline)) |>
@@ -88,7 +88,7 @@ scenarios <- map(isolation_policy_levels,
 Runs the model for a single set of parameter values under a given scenario.
 
 - `overrides`: a named list of parameters to override. Any parameter accepted by `make_mod_parms()` can be overridden (fixed or scenario-level). All others default to the values in `scenario` plus the fixed list.
-- `scenario`: a named list of scenario control parameters with elements `isolation_policy`, `t_wait_test`, `test_sens`. Defaults to the suspected_and_confirmed policy at the baseline test settings.
+- `scenario`: a named list of scenario control parameters with elements `isolation_policy`, `prob_test_daily`, `test_sens`. Defaults to the suspected_and_confirmed policy at the baseline test settings.
 
 Returns a one-row tibble of summary statistics, plus the cumulative outcomes in `grid_outcome_spec` (totals over the whole run).
 
@@ -197,7 +197,7 @@ oat_specs <- tribble(
   "losC",                    1.00,    7.00,       35.00,   "increases",  "increases",        "increases",     "Longer C LOS -> more C in hospital at any time -> more I. Low > 0 required",
   "losI",                    1.00,    14.00,      70.00,   "increases",  "increases",        "complex",       "Longer I LOS -> lower disI -> more I in hospital, transmitting -> more CDI. gamma does not depend on disI, so more cases are identified before discharge -> more confirmed cases, and the share missed untested falls. Missed cases: lower untested share vs more CDI, so complex. Low > 0 required",
   "losFN",                   1.00,    14.00,      70.00,   "increases",  "increases",        "decreases",     "Longer FN LOS -> fewer false negatives discharged before retesting -> fewer missed FN cases and more retests confirmed; FN stay on the ward longer, transmitting -> more I. Low > 0 required",
-  "losXtreat",               1.00,    14.00,      70.00,   "complex",    "complex",          "complex",       "Longer Xtreat LOS -> more Xtreat occupancy -> more betaXtreat transmission -> more I (detectable when test_sens = 1). At the 50% sensitivity baseline FN transmission dominates and dilutes the betaXtreat effect below the 1% threshold. Note: confirmed_cases = theta*Xtest (inflow), not outflow. Low > 0 required",
+  "t_treatment",             1.00,    14.00,      70.00,   "complex",    "complex",          "complex",       "Longer treatment -> more Xtreat occupancy -> more betaXtreat transmission -> more I (detectable when test_sens = 1). At the 50% sensitivity baseline FN transmission dominates and dilutes the betaXtreat effect below the 1% threshold. Note: confirmed_cases = theta*Xtest (inflow), not outflow. Low > 0 required",
 
   # --- Transfer and recovery ---
   "t_patient_transfer",      0.10,    0.50,       2.50,    "increases",  "complex",          "complex",       "Longer transfer (lower tau) -> suspected cases wait longer on the ward in T3 before testing in a side room, transmitting at betaI -> more I. Testing is delayed, and patients dying in T3 are missed, so confirmed and missed cases are complex. gamma, pi, sigma and delta do not include transfer time. Low > 0 required",
@@ -371,7 +371,7 @@ n_complex <- sum(oat_grid$exp_ss_I == "complex" |
 failures <- oat_summary |> filter(!overall_pass)
 ```
 
-Baseline settings: a mean time to testing if not discharged or dead first of `r oat_baseline$t_wait_test` days and `r percent(oat_baseline$test_sens)` test sensitivity, under all isolation policies. Parameters tested: `r n_params`; total model runs: `r nrow(oat_assessed) * 2`.
+Baseline settings: a daily probability of `r fmt_prob(oat_baseline$prob_test_daily)` that an untested CDI case is sent for testing and `r percent(oat_baseline$test_sens)` test sensitivity, under all isolation policies. Parameters tested: `r n_params`; total model runs: `r nrow(oat_assessed) * 2`.
 
 - **PASS:** `r n_pass` of `r nrow(oat_summary)` parameter × policy tests
 - **FAIL:** `r n_fail` of `r nrow(oat_summary)`
@@ -411,8 +411,8 @@ font_base_size <- 7
 fig_width_cm  <- 15.92
 fig_height_cm <- 23.36
 
-oat_subtitle <- paste0("Each parameter varied individually at ",
-                       oat_baseline$t_wait_test, "-day mean time to testing and ",
+oat_subtitle <- paste0("Each parameter varied individually at a daily probability of testing of ",
+                       fmt_prob(oat_baseline$prob_test_daily), " and ",
                        percent(oat_baseline$test_sens), " test sensitivity")
 
 # Descriptive labels for the parameters on the y axis
@@ -433,7 +433,7 @@ oat_param_labels <- c(
   losS                   = "Length of stay, susceptible",
   losC                   = "Length of stay, colonised",
   losI                   = "Length of stay, CDI",
-  losXtreat              = "Length of stay, treated",
+  t_treatment            = "Mean duration of treatment",
   t_patient_transfer     = "Patient transfer time",
   prop_Xtreat_to_S       = "Proportion treated returning to ward",
   prob_mort_S            = "Mortality probability, susceptible",
