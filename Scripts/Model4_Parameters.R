@@ -33,7 +33,6 @@
 # If progression is reported as 'x% of colonised become infected within y days', then this is a
 # cumulative risk and we need to convert to a rate using the prob2rate function.
 
-
 # =========================================================== #
 
 # 2) Initial setup ####
@@ -90,13 +89,13 @@ validate_fixed_parameters <- function(adm_rate,
     stop("All LOS parameters must be > 0.")
   if (t_patient_transfer <= 0 || t_test_turnaround <= 0 || t_wait_retest <= 0 || t_treatment <= 0)
     stop("Time parameters must be > 0.")
-  
+
   # ---- Must be >= 0 ----
   if (beta0 < 0 || betaC < 0 || betaI < 0 || betaXtreat < 0)
     stop("Transmission parameters (beta0, betaC, betaI, betaXtreat) must be >= 0.")
   if (mortI_mult < 0 || mortXtreat_mult < 0)
     stop("mort*_mult values must be >= 0.")
-  
+
   # ---- Must be in [0,1] ----
   if (beta_mult_isolated < 0 || beta_mult_isolated > 1)
     stop("beta_mult_isolated must be in [0,1] (isolation should not increase transmission).")
@@ -112,7 +111,7 @@ validate_fixed_parameters <- function(adm_rate,
     stop("prop_Xtreat_to_S must be in [0,1].")
   if (prob_mort_S < 0 || prob_mort_S >= 1)
     stop("prob_mort_S must be in [0,1).")
-  
+
   # ---- Warnings (plausibility checks) ----
   if ((prop_adm_C + prop_adm_I) > 0.5)
     warning("High imported prevalence (prop_adm_C + prop_adm_I > 0.5). Check assumptions.")
@@ -136,7 +135,7 @@ validate_scenario_inputs <- function(isolation_policy,
     paste0("[", scenario_label, "] ")
   else
     ""
-  
+
   # ---- Must be one of the allowed isolation policies ----
   isolation_levels <- c("none", "confirmed", "suspected_and_confirmed")
   if (!is.character(isolation_policy) ||
@@ -145,7 +144,7 @@ validate_scenario_inputs <- function(isolation_policy,
     stop(nm, "isolation_policy must be one of: ",
          paste(isolation_levels, collapse = ", "), ".")
   }
-  
+
   # ---- Must be in [0,1) (a daily probability; 0 = no testing; gamma would be infinite at 1) ----
   if (!is.numeric(prob_test_daily) ||
       length(prob_test_daily) != 1 || is.na(prob_test_daily) ||
@@ -164,6 +163,7 @@ validate_scenario_inputs <- function(isolation_policy,
     "All scenario-specific parameters have been defined, are positive and proportions are between 0 and 1."
   )
 }
+
 ## e) Function to validate rate parameters  ####
 validate_rate_parameters <- function(alpha,
                                      mu,
@@ -189,7 +189,7 @@ validate_rate_parameters <- function(alpha,
     paste0("[", scenario_label, "] ")
   else
     ""
-  
+
   vals <- c(
     alpha,
     mu,
@@ -210,7 +210,7 @@ validate_rate_parameters <- function(alpha,
     mortFN,
     mortXtreat
   )
-  
+
   nms  <- c(
     "alpha",
     "mu",
@@ -231,23 +231,23 @@ validate_rate_parameters <- function(alpha,
     "mortFN",
     "mortXtreat"
   )
-  
+
   # ---- Must be finite ----
   if (any(!is.finite(vals))) {
     bad <- paste(nms[!is.finite(vals)], collapse = ", ")
     stop(nm, "Non-finite rate parameter(s): ", bad, ".")
   }
-  
+
   # ---- Must be >= 0 ----
   if (any(vals < 0)) {
     bad <- paste(nms[vals < 0], collapse = ", ")
     stop(nm, "Negative rate parameter(s): ", bad, ".")
   }
-  
+
   # ---- Warnings ----
   if (theta + pi > 1)
     warning(nm, "theta + pi > 1; transitions from Xtest may be very fast.")
-  
+
   message("All rate parameters have been defined, are finite and positive.")
 }
 
@@ -260,7 +260,7 @@ fixed <- list(
   adm_rate = 133,
   prop_adm_C = 0.086,
   prop_adm_I = 0.002,
-  
+
   # Transmission parameters
   beta0 = 0.002,
   betaC = 0.008,
@@ -271,24 +271,24 @@ fixed <- list(
   betaXtreat = 0.020,
   # Multiplier on betaI (Xtest, T4) and betaXtreat (Xtreat) for patients isolated in a side room
   beta_mult_isolated = 0.050,
-  
+
   # Progression C -> I
   prop_progress_C_to_I = 0.50,
   abx_prop = 0.373,
   abx_mult = 2.0,
   t_progress_C_to_I = 5.0,
-  
+
   # Decolonisation without treatment (C -> S)
   prop_decolonise_C_to_S = 0.05,
   t_decolonise_C_to_S = 5.0,
-  
+
   # Length of stay (days)
   losS = 7,
   losC = 7,
   # mean LOS is assumed to be higher for infected than susceptible and colonised,
   # as infected patients are symptomatic and less likely to be discharged until symptoms resolve
-  losI = 14, 
-  # mean LOS for false negatives is assumed to be the same as for infected, as they are also 
+  losI = 14,
+  # mean LOS for false negatives is assumed to be the same as for infected, as they are also
   # symptomatic and less likely to be discharged until symptoms resolve.
   # Note: losFN governs the discharge rate (disFN = 1 / losFN), not the
   # actual mean time spent in the FN state. The true mean sojourn in FN is shorter when patients
@@ -297,10 +297,10 @@ fixed <- list(
   # mean duration of treatment (time in Xtreat), after which a treated case either recovers and returns
   # to a general ward (prop_Xtreat_to_S) or is discharged
   t_treatment = 14,
-  
+
   # Patient transfer time (days)
   t_patient_transfer = 0.5,
-  
+
   # Time from test administration to result (days). Fixed across scenarios; scenarios vary
   # isolation_policy, prob_test_daily and test_sens.
   t_test_turnaround = 2.0,
@@ -309,13 +309,13 @@ fixed <- list(
   # Patients in Xtest are assumed to remain in hospital awaiting their result, so there is no
   # discharge from Xtest; patients exit via a positive result (theta), a false negative (pi) or death.
   t_wait_retest = 7.0,
-  
+
   # Proportion recover Xtreat -> S
   prop_Xtreat_to_S = 0.80,
-  
+
   # Mortality: cumulative probability of death over LOS for S only
   prob_mort_S = 0.001,
-  
+
   # Daily mortality multipliers (relative to mortS)
   mortI_mult = 3.0,
   mortXtreat_mult = 1.5
@@ -401,7 +401,7 @@ make_mod_parms <- function(
       error = function(e) stop("'fixed' must be supplied or available in the calling environment.")
     )
   }
-  
+
   # a) Resolve NULL fixed parameters from fixed list ####
   if (is.null(adm_rate))               adm_rate               <- fixed$adm_rate
   if (is.null(prop_adm_C))             prop_adm_C             <- fixed$prop_adm_C
@@ -429,7 +429,7 @@ make_mod_parms <- function(
   if (is.null(prob_mort_S))            prob_mort_S            <- fixed$prob_mort_S
   if (is.null(mortI_mult))             mortI_mult             <- fixed$mortI_mult
   if (is.null(mortXtreat_mult))        mortXtreat_mult        <- fixed$mortXtreat_mult
-  
+
   # b) Validate fixed parameters (including overrides) ####
   validate_fixed_parameters(
     adm_rate = adm_rate,
@@ -459,7 +459,7 @@ make_mod_parms <- function(
     mortI_mult = mortI_mult,
     mortXtreat_mult = mortXtreat_mult
   )
-  
+
   # c) Validate scenario-specific parameters ####
   validate_scenario_inputs(
     isolation_policy    = isolation_policy,
@@ -467,14 +467,14 @@ make_mod_parms <- function(
     test_sens           = test_sens,
     scenario_label      = scenario_label
   )
-  
+
   # d) Calculate derived rate parameters ####
 
   # isolation_policy determines which patients are in a side room:
   #   "none"                    - neither suspected (Xtest) nor confirmed (Xtreat) cases
   #   "confirmed"               - confirmed cases (Xtreat) only
   #   "suspected_and_confirmed" - both suspected (Xtest) and confirmed (Xtreat) cases
-  
+
   # transitions involving a change of location (general ward <-> side room)
   # pass through a transfer state, which patients leave at rate tau = 1 / t_patient_transfer, so
   # transfer time is not added to any other rate.
@@ -490,23 +490,23 @@ make_mod_parms <- function(
   via_T3 <- as.numeric(isolation_policy == "suspected_and_confirmed")
   via_T4 <- as.numeric(isolation_policy == "suspected_and_confirmed")
   via_T5 <- as.numeric(isolation_policy == "suspected_and_confirmed")
-  
-  # Patient transfer rate 
+
+  # Patient transfer rate
   tau    <- 1 / t_patient_transfer
-  
+
   # Transmission parameters for suspected (Xtest) and confirmed (Xtreat) cases
-  
+
   # Suspected cases (Xtest) transmit at betaI on a general ward. Confirmed cases (Xtreat) transmit at
   # the fixed betaXtreat (on treatment) on a general ward. Patients in a side room transmit at the
   # general ward value * beta_mult_isolated. The returned betaXtreat is this policy-adjusted value.
   betaXtest <- switch(isolation_policy,
     none = , confirmed      = betaI,
     suspected_and_confirmed = betaI * beta_mult_isolated)
-  
+
   betaXtreat <- switch(isolation_policy,
     none                                  = betaXtreat,
     confirmed = , suspected_and_confirmed = betaXtreat * beta_mult_isolated)
-  
+
   # Transmission parameter for false negatives
 
   # Assume the same as for infected (i.e. symptomatic but not isolated)
@@ -519,29 +519,29 @@ make_mod_parms <- function(
   betaT1 <- betaI
   betaT3 <- betaI
   betaT4 <- betaI * beta_mult_isolated
-  
-  # Progression from colonised to infected (C -> I) 
-  
-  # Progression is modified by antibiotic use, which enhances progression by a factor of abx_mult in 
+
+  # Progression from colonised to infected (C -> I)
+
+  # Progression is modified by antibiotic use, which enhances progression by a factor of abx_mult in
   # the proportion of colonised receiving antibiotics (abx_prop).
   alpha <- (prop_progress_C_to_I * ((1 - abx_prop) + (abx_prop * abx_mult)) /
               t_progress_C_to_I)
-  
-  # Decolonisation from C -> S 
-  
-  # Decolonisation occurs without treatment is assumed to occur at a constant rate, so we can 
+
+  # Decolonisation from C -> S
+
+  # Decolonisation occurs without treatment is assumed to occur at a constant rate, so we can
   # calculate the rate as the proportion decolonising divided by the mean time to decolonisation.
   mu <- prop_decolonise_C_to_S / t_decolonise_C_to_S
-  
-  # Recovery from treatment and return to a general ward (Xtreat -> S) 
-  
+
+  # Recovery from treatment and return to a general ward (Xtreat -> S)
+
   # Depends on the proportion recovering and returning to S divided by the mean time to recovery.
   # no transfer time added; recovered patients pass through T2 (P2) or
   # T5 (P3).
   delta <- prop_Xtreat_to_S / t_treatment
-  
+
   # Discharges
-  
+
   # Discharges occur at a constant rate, the inverse of the length of stay,
   # which represents the average time until discharge.
   disS      <- 1 / losS
@@ -549,7 +549,7 @@ make_mod_parms <- function(
   disI      <- 1 / losI
   disFN     <- 1 / losFN
   disXtreat <- (1 - prop_Xtreat_to_S) / (t_treatment)
-  
+
   # Patient transfer states: only T4 has discharges:
   #   T1 (P2): confirmed case awaiting a side room for treatment - no discharges
   #   T2 (P2): recovered, awaiting return to the ward - no discharges
@@ -558,12 +558,11 @@ make_mod_parms <- function(
   #   T5 (P3): recovered, awaiting return to the ward - no discharges
   disT4     <- disFN
 
-  
-  # Mortality 
-  
+  # Mortality
+
   # Mortality rates are calculated from the baseline mortality rate for S, which is derived from the
   # cumulative probability of death over the length of stay for S using the prob2rate function.
-  # A multiplier is applied to the baseline mortality rate to calculate the mortality rates for C, I 
+  # A multiplier is applied to the baseline mortality rate to calculate the mortality rates for C, I
   # Xtest, FN and Xtreat, which reflects the increased risk of death associated with infection.
   mortS      <- prob2rate(prob_mort_S, losS)
   mortC      <- mortS
@@ -571,7 +570,7 @@ make_mod_parms <- function(
   mortXtest  <- mortI
   mortFN     <- mortI
   mortXtreat <- mortXtreat_mult * mortS
-  
+
   # Patient transfer states: T1, T3 and T4 are untreated CDI patients (as I and FN); T2 and T5 have
   # recovered, so die at the baseline rate (as S).
   mortT1     <- mortI
@@ -603,7 +602,7 @@ make_mod_parms <- function(
 
   # Rate of retesting after false negative (FN -> Xtest, or FN -> T3 under P3)
   sigma <- 1 / t_wait_retest
-  
+
   # e) Validate rate parameters ####
   validate_rate_parameters(
     alpha      = alpha,
@@ -626,7 +625,7 @@ make_mod_parms <- function(
     mortXtreat = mortXtreat,
     scenario_label = scenario_label
   )
-  
+
   # f) Return list of parameters for the ODE model ####
   list(
     # Scenario controls
@@ -642,7 +641,7 @@ make_mod_parms <- function(
     adm_rate = adm_rate,
     prop_adm_C = prop_adm_C,
     prop_adm_I = prop_adm_I,
-    
+
     # Transmission
     beta0      = beta0,
     betaC      = betaC,
@@ -671,7 +670,7 @@ make_mod_parms <- function(
     pi     = pi,      # Xtest -> FN, or Xtest -> T4 under P3  (false negatives)
     sigma  = sigma,   # FN -> Xtest, or FN -> T3 under P3  (retesting after false negative)
     delta  = delta,   # Xtreat -> S, or Xtreat -> T2 (P2) / T5 (P3)  (recovery)
-    
+
     # Discharge rates
     disS      = disS,
     disC      = disC,

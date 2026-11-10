@@ -47,8 +47,6 @@ rm(list = setdiff(ls(), "params"))
 
 library(tidyverse)
 library(deSolve)
-library(scales)
-library(cowplot)
 
 options(scipen = 1000)
 
@@ -371,7 +369,7 @@ n_complex <- sum(oat_grid$exp_ss_I == "complex" |
 failures <- oat_summary |> filter(!overall_pass)
 ```
 
-Baseline settings: a daily probability of `r fmt_prob(oat_baseline$prob_test_daily)` that an untested CDI case is sent for testing and `r percent(oat_baseline$test_sens)` test sensitivity, under all isolation policies. Parameters tested: `r n_params`; total model runs: `r nrow(oat_assessed) * 2`.
+Baseline settings: a daily probability of `r fmt_prob(oat_baseline$prob_test_daily)` that an untested CDI case is sent for testing and `r scales::percent(oat_baseline$test_sens)` test sensitivity, under all isolation policies. Parameters tested: `r n_params`; total model runs: `r nrow(oat_assessed) * 2`.
 
 - **PASS:** `r n_pass` of `r nrow(oat_summary)` parameter × policy tests
 - **FAIL:** `r n_fail` of `r nrow(oat_summary)`
@@ -413,7 +411,7 @@ fig_height_cm <- 23.36
 
 oat_subtitle <- paste0("Each parameter varied individually at a daily probability of testing of ",
                        fmt_prob(oat_baseline$prob_test_daily), " and ",
-                       percent(oat_baseline$test_sens), " test sensitivity")
+                       scales::percent(oat_baseline$test_sens), " test sensitivity")
 
 # Descriptive labels for the parameters on the y axis
 oat_param_labels <- c(
@@ -455,7 +453,7 @@ oat_theme <- theme_classic(base_size = font_base_size) +
         legend.position     = "none")
 
 # Legend for the isolation policies, shared by all tornado figures (one key per row)
-policy_legend <- get_legend(
+policy_legend <- cowplot::get_legend(
   ggplot(tibble(isolation_policy = factor(isolation_policy_levels, levels = isolation_policy_levels)),
          aes(x = 1, y = 1, fill = isolation_policy)) +
     geom_col() +
@@ -468,7 +466,7 @@ policy_legend <- get_legend(
 
 # Stack a figure's panels with a subtitle line above and the policy legend below
 add_subtitle_and_legend <- function(panels) {
-  plot_grid(ggdraw() + draw_label(oat_subtitle, size = font_base_size, x = 0.01, hjust = 0),
+  cowplot::plot_grid(cowplot::ggdraw() + cowplot::draw_label(oat_subtitle, size = font_base_size, x = 0.01, hjust = 0),
             panels,
             policy_legend,
             ncol = 1, rel_heights = c(0.03, 1, 0.04))
@@ -561,7 +559,7 @@ plot_heatmap_oat <- ggplot(pass_plot_data,
 
 # Combine the 4 plots using cowplot
 combined_oat_plot <- add_subtitle_and_legend(
-  plot_grid(plot_tornado_ssI,
+  cowplot::plot_grid(plot_tornado_ssI,
             plot_tornado_yr_confirmed,
             plot_tornado_yr_missed,
             plot_heatmap_oat,

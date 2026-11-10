@@ -24,9 +24,9 @@
 
 # 1) Introduction ####
 
-# This script defines the ODE function for Model 4, which is a compartmental model of hospital
-# transmission of a pathogen with the following states:
-
+# This script defines the ODE function for Model 4, a compartmental model of hospital transmission
+# of a pathogen, and the functions that run it and summarise and plot its outputs.
+#
 # The model compartments are:
 # S: Susceptible, not colonised or infected
 # C: Colonised, carrying the pathogen but not infected
@@ -77,15 +77,15 @@ validate_run_settings <- function(model_time, time_step, burn_in = 0) {
 model_ode <- function(time, state, parms) {
   with(as.list(c(state, parms)), {
     # a) Ensure non-negative state variables ####
-    
+
     # Avoid negative values for S, C and I as these are used in the force of colonisation
     # calculation and negative values can lead to negative force of colonisation and thus
     # negative flow from S to C.
-    
+
     S <- max(S, 0)
     C <- max(C, 0)
     I <- max(I, 0)
-    
+
     Xtest <- max(Xtest, 0)
     FN <- max(FN, 0)
     Xtreat <- max(Xtreat, 0)
@@ -103,55 +103,55 @@ model_ode <- function(time, state, parms) {
     # is the sum of those in the S, C, I, Xtest, FN, Xtreat and transfer (T1-T5) states.
 
     N <- S + C + I + Xtest + FN + Xtreat + T1 + T2 + T3 + T4 + T5
-    
+
     # c) Ensure non-negative, non-zero N ####
-    
+
     # Ensure the number of patients in the hospital (N) is not negative or zero to avoid
     # issues with division in the force of colonisation calculation.
-    
+
     if (N <= 0) {
       stop("N <= 0, total hospital census must be positive.")
     }
-    
+
     # d) Calculate the force of colonisation (lambda) ####
-    
+
     # The force of colonisation (lambda) is the rate at which susceptible patients become colonised.
-    
+
     # It is calculated as the sum of colonisation due to environmental exposure (beta0) and
     # contributions from colonised, infected, and isolated patients, weighted by their respective
     # transmission rates (betaC, betaI, betaXtest, betaFN, betaXtreat, betaT1, betaT3, betaT4) and
     # normalized by the total hospital census (N). Recovered patients awaiting transfer (T2, T5) are
     # non-infectious, so they have no transmission term but are included in N.
-    
+
     lambda <- beta0 + ((betaC * C + betaI * I + betaXtest * Xtest + betaFN * FN + betaXtreat * Xtreat +
                           betaT1 * T1 + betaT3 * T3 + betaT4 * T4) / N)
-    
+
     # e) Assign admissions to S, C and I ####
-    
+
     # The total number of admissions to the hospital is set at a fixed rate (adm_rate) per day
-    
+
     # The admissions are split between the S, C and I states, based on the a fixed import prevalence
     # of colonised and infected patients, with the remaining admissions to the S state.
-    
+
     # Assume there are no admissions direct to Xtest, FN, Xtreat or the transfer states, as patients
     # are only moved there after admission and subsequent identification as suspected/confirmed cases.
-    
+
     admI <- adm_rate * prop_adm_I
     admC <- adm_rate * prop_adm_C
     admS <- adm_rate - admC - admI
-    
+
     # f) Differential equations ####
-    
+
     # Formulae for updating the numbers of patients in each state variable (dS, dC, dI, dXtest, dFN,
     # dXtreat, dT1 to dT5, dD), based on the flows into and out of each state per time step.
-    
+
     # Flows that involve a change of location go through a transfer state when its flag is 1
     # and directly to the destination when it is 0 (see make_mod_parms() for the flags by policy).
     to_test  <- gamma * I + sigma * FN       # identified (I) or due a retest (FN)
     to_FN    <- pi * Xtest                   # false negative results
     to_treat <- theta * Xtest                # positive results (confirmed cases)
     to_S_rec <- delta * Xtreat               # recovered, returning to a general ward
-    
+
     dS      <- admS + mu * C + (1 - via_T2 - via_T5) * to_S_rec + tau * (T2 + T5) - lambda * S - (disS + mortS) * S
     dC      <- admC + lambda * S - (alpha + mu + disC + mortC) * C
     dI      <- admI + alpha * C - (gamma + disI + mortI) * I
@@ -165,7 +165,7 @@ model_ode <- function(time, state, parms) {
     dT5     <- via_T5 * to_S_rec - (tau + mortT5) * T5
     dD      <- mortS * S + mortC * C + mortI * I + mortXtest * Xtest + mortFN * FN + mortXtreat * Xtreat +
       mortT1 * T1 + mortT2 * T2 + mortT3 * T3 + mortT4 * T4 + mortT5 * T5
-    
+
     # For P1, the differential equations simplify to:
     # dS      <- admS + mu * C + to_S_rec - lambda * S - (disS + mortS) * S
     # dC      <- admC + lambda * S - (alpha + mu + disC + mortC) * C
@@ -179,7 +179,7 @@ model_ode <- function(time, state, parms) {
     # dT2     <- -
     # dT5     <- -
     # dD      <- mortS * S + mortC * C + mortI * I + mortXtest * Xtest + mortFN * FN + mortXtreat * Xtreat
-    
+
     # For P2, the differential equations simplify to:
     # dS      <- admS + mu * C + tau * T2 - lambda * S - (disS + mortS) * S
     # dC      <- admC + lambda * S - (alpha + mu + disC + mortC) * C
@@ -194,7 +194,7 @@ model_ode <- function(time, state, parms) {
     # dT5     <- -
     # dD      <- mortS * S + mortC * C + mortI * I + mortXtest * Xtest + mortFN * FN + mortXtreat * Xtreat +
     #            mortT1 * T1 + mortT2 * T2
-    
+
     # For P3, the differential equations simplify to:
     # dS      <- admS + mu * C + tau * T5 - lambda * S - (disS + mortS) * S
     # dC      <- admC + lambda * S - (alpha + mu + disC + mortC) * C
@@ -209,33 +209,33 @@ model_ode <- function(time, state, parms) {
     # dT5     <- to_S_rec - (tau + mortT5) * T5
     # dD      <- mortS * S + mortC * C + mortI * I + mortXtest * Xtest + mortFN * FN + mortXtreat * Xtreat +
     #            mortT3 * T3 + mortT4 * T4 + mortT5 * T5
-    
+
     # g) Bed and side-room bed occupancy ####
-    
+
     # Bed occupancy is calculated from the number of patients in each state at each time step
-    
+
     # Total bed occupancy
-    
-    # Total bed occupancy at each time step is the sum of patients in S, C, I, Xtest, FN, 
+
+    # Total bed occupancy at each time step is the sum of patients in S, C, I, Xtest, FN,
     # Xtreat and T1 to T5.
     hospital_bed_occupancy <- N
-    
+
     # Side-room bed days
-    
+
     # Number of patients in side rooms at each time step, depending on isolation_policy:
     #   "none"                    - no side rooms used
     #   "confirmed"               - Xtreat, and T2 (recovered, awaiting return to the ward)
     #   "suspected_and_confirmed" - Xtest and Xtreat, and T4 and T5 (awaiting return to the ward)
-    
+
     side_room_Xtest_occupancy  <- if (isolation_policy == "suspected_and_confirmed") Xtest else 0
     side_room_Xtreat_occupancy <- if (isolation_policy %in% c("confirmed", "suspected_and_confirmed")) Xtreat else 0
-    
+
     # Transfer states awaiting a move out of a side room (T2, T4, T5); T1 and T3 are on a general
     # ward. Transfer states not used by the policy are empty, so all three can be summed.
     side_room_T_occupancy      <- if (isolation_policy %in% c("confirmed", "suspected_and_confirmed")) T2 + T4 + T5 else 0
     side_room_bed_occupancy    <- side_room_Xtest_occupancy + side_room_Xtreat_occupancy +
       side_room_T_occupancy
-    
+
     general_ward_bed_occupancy <- hospital_bed_occupancy - side_room_bed_occupancy
 
     # Current CDI cases and those ever tested (for comparison with point-prevalence studies)
@@ -257,18 +257,18 @@ model_ode <- function(time, state, parms) {
     CDI_tested_census <- Xtest + FN + Xtreat + T1 + T4 + T3_from_FN
 
     # h) Flows (instantaneous rates per day) ####
-    
+
     # These are rates per day, evaluated at each ODE time step (half-day).
-    
+
     # Admissions
     admitted_susceptible_rate <- admS
     admitted_colonised_rate <- admC
     admitted_infected_rate <- admI
     total_admissions_rate <- admS + admC + admI
-    
+
     # Colonisation and decolonisation
     colonised_in_hospital_rate <- lambda * S
-    
+
     # Colonisation in hospital by source: background acquisition (beta0) and contact with each
     # patient group (patient-to-patient transmission). The sources sum to colonised_in_hospital_rate.
     colonised_background_rate  <- beta0 * S
@@ -285,16 +285,16 @@ model_ode <- function(time, state, parms) {
       colonised_from_T1_rate + colonised_from_T3_rate + colonised_from_T4_rate
     decolonised_in_hospital_rate <- mu * C
     total_colonised_incidence_rate <- colonised_in_hospital_rate + admitted_colonised_rate
-    
+
     # Infection
     infected_in_hospital_rate <- alpha * C
     total_infected_incidence_rate <- infected_in_hospital_rate + admitted_infected_rate
-    
+
     # Case identification and recovery
     suspected_cases_rate <- gamma * I
     confirmed_cases_rate <- theta * Xtest
     recovered_cases_rate <- (delta * Xtreat) + (disXtreat * Xtreat)
-    
+
     # Testing
     # The specimen is taken on entry to Xtest. Under P3 patients first wait in T3, so tests are
     # counted on leaving T3 (tau * T3), split between first tests and retests by the share of T3
@@ -316,7 +316,7 @@ model_ode <- function(time, state, parms) {
     missed_false_negative_cases_rate <- (disFN + mortFN) * FN + (disT4 + mortT4) * T4 +
       mortT3 * T3_from_FN
     total_missed_cases_rate <- missed_untested_cases_rate + missed_false_negative_cases_rate
-    
+
     # Discharges
     discharges_susceptible_rate <- disS * S
     discharges_colonised_rate <- disC * C
@@ -329,7 +329,7 @@ model_ode <- function(time, state, parms) {
     discharges_while_infected_rate <-  discharges_infected_rate + discharges_FN_rate
     total_discharges_rate <- discharges_susceptible_rate + discharges_colonised_rate +
                           discharges_infected_rate + discharges_FN_rate + discharges_recovered_rate
-    
+
     # Deaths
     deaths_susceptible_rate <- mortS * S
     deaths_colonised_rate <- mortC * C
@@ -351,19 +351,19 @@ model_ode <- function(time, state, parms) {
     total_deaths_rate <- deaths_susceptible_rate + deaths_colonised_rate + deaths_infected_rate +
       deaths_suspected_cases_rate + deaths_FN_rate + deaths_confirmed_cases_rate +
       deaths_recovered_transfer_rate
-    
+
     total_exits_rate <- total_discharges_rate + total_deaths_rate
-    
+
     # i) Return state levels and flows for each time step as a list ####
-    
+
     list(
       c(dS, dC, dI, dXtest, dFN, dXtreat, dT1, dT2, dT3, dT4, dT5, dD),
       c(
         N = N,
-        
+
         # Force of colonisation
         lambda = lambda,
-        
+
         # Bed occupancy
         hospital_bed_occupancy = hospital_bed_occupancy,
         side_room_bed_occupancy = side_room_bed_occupancy,
@@ -381,7 +381,7 @@ model_ode <- function(time, state, parms) {
         admitted_colonised_rate = admitted_colonised_rate,
         admitted_infected_rate = admitted_infected_rate,
         total_admissions_rate = total_admissions_rate,
-        
+
         # Colonisation and decolonisation
         colonised_in_hospital_rate = colonised_in_hospital_rate,
         colonised_background_rate = colonised_background_rate,
@@ -396,27 +396,27 @@ model_ode <- function(time, state, parms) {
         colonised_patient_to_patient_rate = colonised_patient_to_patient_rate,
         decolonised_in_hospital_rate = decolonised_in_hospital_rate,
         total_colonised_incidence_rate = total_colonised_incidence_rate,
-        
+
         # Infection
         infected_in_hospital_rate = infected_in_hospital_rate,
         total_infected_incidence_rate = total_infected_incidence_rate,
-        
+
         # Case identification and recovery
         suspected_cases_rate = suspected_cases_rate,
         confirmed_cases_rate = confirmed_cases_rate,
         recovered_cases_rate = recovered_cases_rate,
-        
+
         # Testing
         first_test_rate = first_test_rate,
         retest_false_negatives_rate = retest_false_negatives_rate,
         total_test_rate = total_test_rate,
         false_negatives_rate = false_negatives_rate,
-        
+
         # Missed cases
         missed_untested_cases_rate = missed_untested_cases_rate,
         missed_false_negative_cases_rate = missed_false_negative_cases_rate,
         total_missed_cases_rate = total_missed_cases_rate,
-        
+
         # Discharges
         discharges_susceptible_rate = discharges_susceptible_rate,
         discharges_colonised_rate = discharges_colonised_rate,
@@ -425,7 +425,7 @@ model_ode <- function(time, state, parms) {
         discharges_recovered_rate = discharges_recovered_rate,
         discharges_while_infected_rate = discharges_while_infected_rate,
         total_discharges_rate = total_discharges_rate,
-        
+
         # Deaths
         deaths_susceptible_rate = deaths_susceptible_rate,
         deaths_colonised_rate = deaths_colonised_rate,
@@ -438,7 +438,7 @@ model_ode <- function(time, state, parms) {
         deaths_confirmed_untreated_rate = deaths_confirmed_untreated_rate,
         deaths_post_infection_rate = deaths_post_infection_rate,
         total_deaths_rate = total_deaths_rate,
-        
+
         # Exits
         total_exits_rate = total_exits_rate
       )
@@ -453,7 +453,7 @@ model_ode <- function(time, state, parms) {
 # For a given set of parameters and return the output as a data frame.
 
 run_scenario <- function(parms) {
-  as.data.frame(ode(
+  as.data.frame(deSolve::ode(
     y = mod.init,
     times = mod.t,
     func = model_ode,
@@ -471,7 +471,7 @@ run_scenario <- function(parms) {
 # conditions to steady state. It is excluded from all per-step flows, patient-days and cumulative
 # totals, which therefore cover the analysis period (burn_in, model_time].
 add_quantities <- function(df, time_step, burn_in = 0) {
-  df %>%
+  df |>
     mutate(
       # Year of the analysis period, using ceiling() to bin days after the burn-in into years:
       # (burn_in, burn_in + 365] -> Year 1, and so on. Rows in the burn-in are year 0.
@@ -482,7 +482,7 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       # and including the end of the burn-in (always including time 0) have width 0, so cumulative
       # totals and patient-days cover exactly the analysis period.
       step_width = if_else(time <= burn_in, 0, time_step),
-      
+
       # Patient-days per state
       S_days     = S * step_width,
       C_days     = C * step_width,
@@ -505,13 +505,13 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       CDI_tested_days = CDI_tested_census * step_width,
 
       # Per-step flows
-      
+
       # Admissions
       admitted_susceptible_step = admitted_susceptible_rate * step_width,
       admitted_colonised_step = admitted_colonised_rate * step_width,
       admitted_infected_step = admitted_infected_rate * step_width,
       total_admissions_step = total_admissions_rate * step_width,
-      
+
       # Colonisation and decolonisation
       colonised_in_hospital_step = colonised_in_hospital_rate * step_width,
       colonised_background_step = colonised_background_rate * step_width,
@@ -526,27 +526,27 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       colonised_patient_to_patient_step = colonised_patient_to_patient_rate * step_width,
       decolonised_in_hospital_step = decolonised_in_hospital_rate * step_width,
       total_colonised_incidence_step = total_colonised_incidence_rate * step_width,
-      
+
       # Infection
       infected_in_hospital_step = infected_in_hospital_rate * step_width,
       total_infected_incidence_step = total_infected_incidence_rate * step_width,
-      
+
       # Case identification and recovery
       suspected_cases_step = suspected_cases_rate * step_width,
       confirmed_cases_step = confirmed_cases_rate * step_width,
       recovered_cases_step = recovered_cases_rate * step_width,
-      
+
       # Testing
       first_test_step = first_test_rate * step_width,
       retest_false_negatives_step = retest_false_negatives_rate * step_width,
       total_test_step = total_test_rate * step_width,
       false_negatives_step = false_negatives_rate * step_width,
-      
+
       # Missed cases
       missed_untested_cases_step = missed_untested_cases_rate * step_width,
       missed_false_negative_cases_step = missed_false_negative_cases_rate * step_width,
       total_missed_cases_step = total_missed_cases_rate * step_width,
-      
+
       # Discharges
       discharges_susceptible_step = discharges_susceptible_rate * step_width,
       discharges_colonised_step = discharges_colonised_rate * step_width,
@@ -555,7 +555,7 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       discharges_recovered_step = discharges_recovered_rate * step_width,
       discharges_while_infected_step = discharges_while_infected_rate * step_width,
       total_discharges_step = total_discharges_rate * step_width,
-      
+
       # Deaths
       deaths_susceptible_step = deaths_susceptible_rate * step_width,
       deaths_colonised_step = deaths_colonised_rate * step_width,
@@ -568,18 +568,18 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       deaths_confirmed_untreated_step = deaths_confirmed_untreated_rate * step_width,
       deaths_post_infection_step = deaths_post_infection_rate * step_width,
       total_deaths_step = total_deaths_rate * step_width,
-      
+
       # Exits
       total_exits_step = total_exits_rate * step_width,
-      
+
       # Cumulative flows
-      
+
       # Admissions
       cum_admitted_susceptible = cumsum(admitted_susceptible_step),
       cum_admitted_colonised = cumsum(admitted_colonised_step),
       cum_admitted_infected = cumsum(admitted_infected_step),
       cum_total_admissions = cumsum(total_admissions_step),
-      
+
       # Colonisation and decolonisation
       cum_colonised_in_hospital = cumsum(colonised_in_hospital_step),
       cum_colonised_background = cumsum(colonised_background_step),
@@ -594,28 +594,28 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       cum_colonised_patient_to_patient = cumsum(colonised_patient_to_patient_step),
       cum_decolonised_in_hospital = cumsum(decolonised_in_hospital_step),
       cum_total_colonised_incidence = cumsum(total_colonised_incidence_step),
-      
+
       # Infections
       cum_infected_in_hospital = cumsum(infected_in_hospital_step),
       cum_total_infected_incidence = cumsum(total_infected_incidence_step),
-      
+
       # Case identification and recovery
       cum_suspected_cases = cumsum(suspected_cases_step),
       cum_confirmed_cases = cumsum(confirmed_cases_step),
       cum_recovered_cases = cumsum(recovered_cases_step),
-      
+
       # Testing
       cum_first_test = cumsum(first_test_step),
       cum_retest_false_negatives = cumsum(retest_false_negatives_step),
       cum_total_test = cumsum(total_test_step),
       cum_false_negatives = cumsum(false_negatives_rate * step_width),
-      
+
       # Missing cases
       cum_missed_untested_cases = cumsum(missed_untested_cases_step),
       cum_missed_false_negative_cases = cumsum(missed_false_negative_cases_step),
       cum_total_missed_cases = cumsum(total_missed_cases_step),
-      
-      # Discharges   
+
+      # Discharges
       cum_discharges_susceptible = cumsum(discharges_susceptible_step),
       cum_discharges_colonised = cumsum(discharges_colonised_step),
       cum_discharges_infected = cumsum(discharges_infected_step),
@@ -623,7 +623,7 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       cum_discharges_recovered = cumsum(discharges_recovered_step),
       cum_discharges_while_infected = cumsum(discharges_while_infected_step),
       cum_total_discharges = cumsum(total_discharges_step),
-      
+
       # Deaths
       cum_deaths_susceptible = cumsum(deaths_susceptible_step),
       cum_deaths_colonised = cumsum(deaths_colonised_step),
@@ -636,11 +636,11 @@ add_quantities <- function(df, time_step, burn_in = 0) {
       cum_deaths_confirmed_untreated = cumsum(deaths_confirmed_untreated_step),
       cum_deaths_post_infection = cumsum(deaths_post_infection_step),
       cum_total_deaths = cumsum(total_deaths_step),
-      
+
       # Exits
       cum_total_exits = cumsum(total_exits_step)
-    ) %>%
-    select(-step_width) %>%
+    ) |>
+    select(-step_width) |>
     relocate(year, .before = time)
 }
 
@@ -675,8 +675,8 @@ calculate_total_patient_days <- function(df) {
 # Return any rows with negative values for inspection, and print a warning message if any are found.
 negative_value_rows <- function(df) {
   # 1. Save the filtered data to a new variable (e.g., neg_df)
-  neg_df <- df %>% filter(if_any(where(is.numeric), ~ .x < 0))
-  
+  neg_df <- df |> filter(if_any(where(is.numeric), ~ .x < 0))
+
   # 2. Check the row count of the FILTERED data (neg_df), not the original df
   if (nrow(neg_df) == 0) {
     message("No negative values found in the model output.")
@@ -685,7 +685,7 @@ negative_value_rows <- function(df) {
       "Negative values found in the model output - check Outputs/negative_rows.csv for details."
     )
   }
-  
+
   # 3. Explicitly return the filtered dataframe so lapply() captures it
   return(neg_df)
 }
@@ -703,19 +703,19 @@ find_stabilisation_day <- function(df,
                                    tol = 1e-4,
                                    consecutive_days = 30) {
   stopifnot(all(states %in% names(df)))
-  
-  x <- df %>% arrange(time) %>% select(time, all_of(states))
-  d <- x %>% mutate(across(all_of(states), ~ abs(.x - lag(.x))))
-  stable_flag <- d %>%
+
+  x <- df |> arrange(time) |> select(time, all_of(states))
+  d <- x |> mutate(across(all_of(states), ~ abs(.x - lag(.x))))
+  stable_flag <- d |>
     mutate(stable = if_all(all_of(states), ~ !is.na(.x) &
-                             .x <= tol)) %>%
+                             .x <= tol)) |>
     pull(stable)
-  
+
   r <- rle(stable_flag)
   ends <- cumsum(r$lengths)
   starts <- ends - r$lengths + 1
   idx <- which(r$values & r$lengths >= consecutive_days)[1]
-  
+
   # If no stabilisation period is found, print message and return NA
   if (is.na(idx)) {
     message(
@@ -727,10 +727,10 @@ find_stabilisation_day <- function(df,
     )
     return(NA_real_)
   }
-  
+
   # If stabilisation is found, save the time, print message, and explicitly RETURN it
   stab_time <- x$time[starts[idx]]
-  
+
   message(
     "Stabilisation achieved in ",
     consecutive_days,
@@ -740,7 +740,7 @@ find_stabilisation_day <- function(df,
     tol,
     ")."
   )
-  
+
   return(stab_time)
 }
 
@@ -774,34 +774,34 @@ stabilisation_summary <- function(df,
                                     "admitted_colonised_rate",
                                     "admitted_infected_rate",
                                     "total_admissions_rate",
-                                    
+
                                     "colonised_in_hospital_rate",
                                     "decolonised_in_hospital_rate",
                                     "total_colonised_incidence_rate",
-                                    
+
                                     "infected_in_hospital_rate",
                                     "total_infected_incidence_rate",
-                                    
+
                                     "suspected_cases_rate",
                                     "confirmed_cases_rate",
                                     "recovered_cases_rate",
-                                    
+
                                     "first_test_rate",
                                     "retest_false_negatives_rate",
                                     "total_test_rate",
                                     "false_negatives_rate",
-                                    
+
                                     "missed_untested_cases_rate",
                                     "missed_false_negative_cases_rate",
                                     "total_missed_cases_rate",
-                                    
+
                                     "discharges_susceptible_rate",
                                     "discharges_colonised_rate",
                                     "discharges_infected_rate",
                                     "discharges_recovered_rate",
                                     "discharges_while_infected_rate",
                                     "total_discharges_rate",
-                                    
+
                                     "deaths_susceptible_rate",
                                     "deaths_colonised_rate",
                                     "deaths_infected_rate",
@@ -809,7 +809,7 @@ stabilisation_summary <- function(df,
                                     "deaths_confirmed_cases_rate",
                                     "deaths_post_infection_rate",
                                     "total_deaths_rate",
-                                    
+
                                     "total_exits_rate"
                                   ),
                                   extra_vars = c("N", "lambda"),
@@ -817,14 +817,14 @@ stabilisation_summary <- function(df,
                                   consecutive_days = 10) {
   # Stabilisation assessed on living/transmission states (i.e. not "Dead")
   stab_states <- c("S", "C", "I", "Xtest", "FN", "Xtreat", "T1", "T2", "T3", "T4", "T5")
-  
+
   stopifnot(all(stab_states %in% names(df)))
-  
+
   t_star <- find_stabilisation_day(df,
                                    stab_states,
                                    tol = tol,
                                    consecutive_days = consecutive_days)
-  
+
   if (is.na(t_star)) {
     return(
       tibble(
@@ -836,22 +836,22 @@ stabilisation_summary <- function(df,
       )
     )
   }
-  
+
   keep_vars <- unique(c(state_vars, flow_vars, extra_vars))
   keep_vars <- keep_vars[keep_vars %in% names(df)]
-  
-  row_star <- df %>%
-    filter(time == t_star) %>%
-    slice(1) %>%
+
+  row_star <- df |>
+    filter(time == t_star) |>
+    slice(1) |>
     select(all_of(keep_vars))
-  
+
   tibble(
     scenario = scenario_label,
     stabilisation_day = t_star,
     tolerance = tol,
     consecutive_days = consecutive_days,
     stabilised = TRUE
-  ) %>%
+  ) |>
     bind_cols(row_star)
 }
 
@@ -859,9 +859,9 @@ stabilisation_summary <- function(df,
 
 # Years of the analysis period only (year >= 1); the burn-in (year 0) is excluded.
 make_annual_summary <- function(df, scenario_label) {
-  df %>%
-    filter(year >= 1) %>%
-    group_by(year) %>%
+  df |>
+    filter(year >= 1) |>
+    group_by(year) |>
     summarise(
       # Bed days
       annual_S_patient_days   = sum(S_days, na.rm = TRUE),
@@ -881,40 +881,40 @@ make_annual_summary <- function(df, scenario_label) {
       annual_side_room_Xtest_bed_days  = sum(side_room_Xtest_bed_days, na.rm = TRUE),
       annual_side_room_Xtreat_bed_days = sum(side_room_Xtreat_bed_days, na.rm = TRUE),
       annual_side_room_T_bed_days      = sum(side_room_T_bed_days, na.rm = TRUE),
-      
+
       # Admissions
       annual_admitted_susceptible = sum(admitted_susceptible_step, na.rm = TRUE),
       annual_admitted_colonised = sum(admitted_colonised_step, na.rm = TRUE),
       annual_admitted_infected = sum(admitted_infected_step, na.rm = TRUE),
       annual_total_admissions = sum(total_admissions_step, na.rm = TRUE),
-      
+
       # Colonisation and decolonisation
       annual_colonised_in_hospital = sum(colonised_in_hospital_step, na.rm = TRUE),
       annual_colonised_background = sum(colonised_background_step, na.rm = TRUE),
       annual_colonised_patient_to_patient = sum(colonised_patient_to_patient_step, na.rm = TRUE),
       annual_decolonised_in_hospital = sum(decolonised_in_hospital_step, na.rm = TRUE),
       annual_total_colonised_incidence = sum(total_colonised_incidence_step, na.rm = TRUE),
-      
+
       # Infection
       annual_infected_in_hospital = sum(infected_in_hospital_step, na.rm = TRUE),
       annual_total_infected_incidence = sum(total_infected_incidence_step, na.rm = TRUE),
-      
+
       # Case identification and recovery
       annual_suspected_cases = sum(suspected_cases_step, na.rm = TRUE),
       annual_confirmed_cases = sum(confirmed_cases_step, na.rm = TRUE),
       annual_recovered_cases = sum(recovered_cases_step, na.rm = TRUE),
-      
+
       # Testing
       annual_first_test = sum(first_test_step, na.rm = TRUE),
       annual_retest_false_negatives = sum(retest_false_negatives_step, na.rm = TRUE),
       annual_total_test = sum(total_test_step, na.rm = TRUE),
       annual_false_negatives = sum(false_negatives_step, na.rm = TRUE),
-      
+
       # Missed cases
       annual_missed_untested_cases = sum(missed_untested_cases_step, na.rm = TRUE),
       annual_missed_false_negative_cases = sum(missed_false_negative_cases_step, na.rm = TRUE),
       annual_total_missed_cases = sum(total_missed_cases_step, na.rm = TRUE),
-      
+
       # Discharges
       annual_discharges_susceptible = sum(discharges_susceptible_step, na.rm = TRUE),
       annual_discharges_colonised = sum(discharges_colonised_step, na.rm = TRUE),
@@ -923,7 +923,7 @@ make_annual_summary <- function(df, scenario_label) {
       annual_discharges_recovered = sum(discharges_recovered_step, na.rm = TRUE),
       annual_discharges_while_infected = sum(discharges_while_infected_step, na.rm = TRUE),
       annual_total_discharges = sum(total_discharges_step, na.rm = TRUE),
-      
+
       # Deaths
       annual_deaths_susceptible = sum(deaths_susceptible_step, na.rm = TRUE),
       annual_deaths_colonised = sum(deaths_colonised_step, na.rm = TRUE),
@@ -936,20 +936,20 @@ make_annual_summary <- function(df, scenario_label) {
       annual_deaths_recovered_transfer  = sum(deaths_recovered_transfer_step, na.rm = TRUE),
       annual_deaths_post_infection = sum(deaths_post_infection_step, na.rm = TRUE),
       annual_total_deaths = sum(total_deaths_step, na.rm = TRUE),
-      
+
       # Exits
       annual_total_exits = sum(total_exits_step, na.rm = TRUE),
-      
+
       .groups = "drop"
-    ) %>%
+    ) |>
     # Hospital-acquired CDI (estimated): hospital-onset CDI x the share of colonisations that were
     # acquired in hospital (as in make_final_outcomes())
     mutate(
       annual_hospital_attributable_I = if_else(annual_total_colonised_incidence > 0,
         annual_infected_in_hospital * annual_colonised_in_hospital / annual_total_colonised_incidence, 0),
       .after = annual_total_infected_incidence
-    ) %>%
-    mutate(scenario = scenario_label) %>%
+    ) |>
+    mutate(scenario = scenario_label) |>
     select(scenario, year, everything())
 }
 
@@ -976,8 +976,8 @@ make_final_outcomes <- function(scenario_post,
                                 mortXtreat_mult = fixed$mortXtreat_mult) {
   attributable <- function(mult) if (is.finite(mult) && mult > 0) max(0, 1 - 1 / mult) else 0
   bind_rows(lapply(names(scenario_post), function(nm) {
-    last <- scenario_post[[nm]] %>% filter(time == max(time)) %>% slice(1)
-    
+    last <- scenario_post[[nm]] |> filter(time == max(time)) |> slice(1)
+
     # Post-hoc split of cumulative confirmed cases between first test and retest
     # Based on the proportion of the inflow to Xtest from I and FN
     prop_first_test <- if (last$cum_total_test > 0) {
@@ -985,12 +985,12 @@ make_final_outcomes <- function(scenario_post,
     } else {
       0
     }
-  
+
     # Cumulative confirmed cases via first test vs retest
     # Based on the proportion of the inflow to Xtest
     cum_confirmed_via_first_test <- last$cum_confirmed_cases * prop_first_test
     cum_confirmed_via_retest <- last$cum_confirmed_cases * (1 - prop_first_test)
-   
+
     # Hospital-attributable infections
     # Proportion of C pool that is hospital-acquired, using gross inflow ratio.
     # Decolonisation (mu) applies equally to both hospital-acquired and imported C,
@@ -1006,7 +1006,7 @@ make_final_outcomes <- function(scenario_post,
     } else {
       0
     }
-    
+
     # Split hospital-acquired colonisations and CDI into background acquisition (beta0) and
     # patient-to-patient transmission. Hospital-attributable CDI is apportioned by the share of
     # in-hospital colonisations from each route (same gross-inflow logic as above).
@@ -1018,11 +1018,11 @@ make_final_outcomes <- function(scenario_post,
     safe_prop <- function(num, den) if (den > 0) num / den else 0
     cum_hospital_attributable_I_patient_to_patient <- cum_hospital_attributable_I * share_patient_to_patient
     cum_hospital_attributable_I_background         <- cum_hospital_attributable_I * (1 - share_patient_to_patient)
-   
-    # Add these to the final outcomes tibble 
+
+    # Add these to the final outcomes tibble
     tibble(
       scenario     = nm,
-      
+
       # Final state occupancy
       final_S      = last$S,
       final_C      = last$C,
@@ -1037,23 +1037,23 @@ make_final_outcomes <- function(scenario_post,
       final_T5     = last$T5,
       final_D      = last$D,
       final_lambda = last$lambda,
-      
+
       # Final bed occupancy
       final_hospital_bed_occupancy = last$hospital_bed_occupancy,
       final_general_ward_bed_occupancy = last$general_ward_bed_occupancy,
       final_side_room_bed_occupancy = last$side_room_bed_occupancy,
-      
+
       # Admissions
       cum_admitted_susceptible = last$cum_admitted_susceptible,
       cum_admitted_colonised   = last$cum_admitted_colonised,
       cum_admitted_infected    = last$cum_admitted_infected,
       cum_total_admissions     = last$cum_total_admissions,
-      
+
       # Colonisation
       cum_colonised_in_hospital     = last$cum_colonised_in_hospital,
       cum_decolonised_in_hospital   = last$cum_decolonised_in_hospital,
       cum_total_colonised_incidence = last$cum_total_colonised_incidence,
-      
+
       # Colonisation in hospital by source
       cum_colonised_background = last$cum_colonised_background,
       cum_colonised_from_C = last$cum_colonised_from_C,
@@ -1075,34 +1075,33 @@ make_final_outcomes <- function(scenario_post,
       prop_p2p_from_T1     = safe_prop(last$cum_colonised_from_T1,     last$cum_colonised_patient_to_patient),
       prop_p2p_from_T3     = safe_prop(last$cum_colonised_from_T3,     last$cum_colonised_patient_to_patient),
       prop_p2p_from_T4     = safe_prop(last$cum_colonised_from_T4,     last$cum_colonised_patient_to_patient),
-      
+
       # Infection
       cum_infected_in_hospital     = last$cum_infected_in_hospital,
       cum_total_infected_incidence = last$cum_total_infected_incidence,
-      
+
       # Case identification and recovery
       cum_suspected_cases = last$cum_suspected_cases,
       cum_confirmed_cases = last$cum_confirmed_cases,
       cum_recovered_cases = last$cum_recovered_cases,
-      
+
       # Testing
       cum_first_test             = last$cum_first_test,
       cum_retest_false_negatives = last$cum_retest_false_negatives,
       cum_total_test             = last$cum_total_test,
       cum_false_negatives        = last$cum_false_negatives,
-      
+
       # Missed cases
       cum_missed_untested_cases       = last$cum_missed_untested_cases,
       cum_missed_false_negative_cases = last$cum_missed_false_negative_cases,
       cum_total_missed_cases          = last$cum_total_missed_cases,
-      
+
       # Confirmation via first test vs retest
       cum_confirmed_via_first_test = cum_confirmed_via_first_test,
       cum_confirmed_via_retest = cum_confirmed_via_retest,
-     
+
       # Hospital-attributable infections
       prop_C_hospital_acquired     = prop_C_hospital_acquired,
-      prop_C_hospital_attributable = prop_C_hospital_acquired,
       cum_hospital_attributable_I  = cum_hospital_attributable_I,
       prop_I_hospital_attributable = prop_I_hospital_attributable,
       cum_hospital_attributable_I_patient_to_patient = cum_hospital_attributable_I_patient_to_patient,
@@ -1111,7 +1110,7 @@ make_final_outcomes <- function(scenario_post,
         safe_prop(cum_hospital_attributable_I_patient_to_patient, last$cum_total_infected_incidence),
       prop_I_hospital_attributable_background =
         safe_prop(cum_hospital_attributable_I_background, last$cum_total_infected_incidence),
-     
+
       # Discharges
       cum_discharges_susceptible    = last$cum_discharges_susceptible,
       cum_discharges_colonised      = last$cum_discharges_colonised,
@@ -1120,7 +1119,7 @@ make_final_outcomes <- function(scenario_post,
       cum_discharges_recovered      = last$cum_discharges_recovered,
       cum_discharges_while_infected = last$cum_discharges_while_infected,
       cum_total_discharges          = last$cum_total_discharges,
-      
+
       # Deaths
       cum_deaths_susceptible     = last$cum_deaths_susceptible,
       cum_deaths_colonised       = last$cum_deaths_colonised,
@@ -1139,7 +1138,7 @@ make_final_outcomes <- function(scenario_post,
           attributable(mortI_mult) +
         last$cum_deaths_confirmed_treated * attributable(mortXtreat_mult),
       cum_total_deaths           = last$cum_total_deaths,
-      
+
       # Exits
       cum_total_exits             = last$cum_total_exits
     )
@@ -1165,10 +1164,27 @@ make_final_outcomes <- function(scenario_post,
 #                               as Mawer et al. (2019) (Outcome A4)
 #   avg_LOS                   - patient bed-days / admissions (Outcome C1)
 #   prop_side_room_bed_days   - side-room bed-days / all patient bed-days (Outcome C4)
+# Rates per 10,000 patient bed-days, for comparison with surveillance data (cases and bed-days over the
+# same period, so the same per year or over the whole analysis period):
+#   rate_cdi_actual           - incident CDI cases (Outcome E1, actual)
+#   rate_cdi_observed         - confirmed (detected) CDI cases (Outcome E1, observed)
+#   rate_ho_actual            - hospital-onset CDI cases (Outcome E2, actual)
+#   rate_ho_observed          - confirmed hospital-onset CDI cases (Outcome E2, observed), estimated: confirmed
+#                               cases x the hospital-onset share of incident CDI cases. Every CDI case enters I
+#                               and then follows the same rates whatever its origin, so the share confirmed is
+#                               the same for every origin (as for missed cases by origin in make_grid_rates()).
+#   rate_tests                - faecal specimens tested, first tests and retests (Outcome E3)
 add_derived_outcomes <- function(df) {
   safe_div <- function(num, den) ifelse(den > 0, num / den, NA_real_)
+  per_10k  <- function(n) safe_div(1e4 * n, df$hospital_bed_days)
   df |>
     mutate(
+      rate_cdi_actual           = per_10k(cum_total_infected_incidence),
+      rate_cdi_observed         = per_10k(cum_confirmed_cases),
+      rate_ho_actual            = per_10k(cum_infected_in_hospital),
+      rate_ho_observed          = per_10k(cum_confirmed_cases *
+                                            safe_div(cum_infected_in_hospital, cum_total_infected_incidence)),
+      rate_tests                = per_10k(cum_total_test),
       avg_LOS                   = safe_div(hospital_bed_days,             cum_total_admissions),
       prop_side_room_bed_days   = safe_div(side_room_bed_days,            hospital_bed_days),
       prop_sent_for_testing     = safe_div(cum_suspected_cases,           cum_total_infected_incidence),
@@ -1202,8 +1218,7 @@ add_derived_outcomes <- function(df) {
 
 make_research_outcomes_table <- function(final_outcomes, patient_days_summary, per_year = FALSE) {
 
-  safe_div <- function(num, den) ifelse(den > 0, num / den, NA_real_)
-
+  # Final outcomes joined to patient-days, with the derived outcomes (proportions, rates, etc.)
   fo <- final_outcomes |>
     left_join(
       patient_days_summary |> select(scenario, hospital_bed_days, general_ward_bed_days,
@@ -1249,6 +1264,12 @@ make_research_outcomes_table <- function(final_outcomes, patient_days_summary, p
     "D) CDI case outcomes",        "Outcome D5: Mean time from CDI symptom onset to first test, among cases tested (days)",   "mean_wait_test",      "dec",
     "D) CDI case outcomes",        "Outcome D6: Mean time from CDI symptom onset to treatment, among cases treated (days)",   "mean_wait_treatment", "dec",
 
+    "E) Comparison with surveillance data", "Outcome E1: Actual CDI incidence (per 10,000 patient bed-days)",                       "rate_cdi_actual",   "dec",
+    "E) Comparison with surveillance data", "Outcome E1: Observed (detected) CDI incidence (per 10,000 patient bed-days)",          "rate_cdi_observed", "dec",
+    "E) Comparison with surveillance data", "Outcome E2: Actual hospital-onset CDI incidence (per 10,000 patient bed-days)",        "rate_ho_actual",    "dec",
+    "E) Comparison with surveillance data", "Outcome E2: Observed (detected) hospital-onset CDI incidence, estimated (per 10,000 patient bed-days)", "rate_ho_observed", "dec",
+    "E) Comparison with surveillance data", "Outcome E3: Faecal specimens tested (per 10,000 patient bed-days)",                   "rate_tests",        "dec",
+
     "ICER numerator (costs)",      "General ward patient bed-days (n)",                                       "general_ward_bed_days",         "n",
     "ICER numerator (costs)",      "Side-room patient bed-days (n)",                                          "side_room_bed_days",            "n",
     "ICER numerator (costs)",      "Confirmed CDI cases: treatment courses (n)",                              "cum_confirmed_cases",           "n",
@@ -1287,35 +1308,6 @@ make_research_outcomes_table <- function(final_outcomes, patient_days_summary, p
     rename("Research question" = group, "Outcome" = label)
 }
 
-## c) Final outcomes vs base scenario ####
-
-# Takes the final_outcomes tibble and returns absolute differences (scenario minus base) vs a
-# chosen base scenario for all numeric columns. base_scenario is a scenario label and must be
-# supplied, e.g. "P1_none_test050_sens050".
-#
-# Column names are prefixed with "d_" and suffixed with "_vs_{base_scenario}".
-# The "final_" and "cum_" prefixes are stripped for brevity, e.g. with
-# base_scenario = "P1_none_test050_sens050":
-#   final_S             -> d_S_vs_P1_none_test050_sens050
-#   cum_confirmed_cases -> d_confirmed_cases_vs_P1_none_test050_sens050
-# Section 12 of the QMD then renames the suffix to the comparison, e.g. "_P2_vs_P1".
-
-make_final_outcomes_vs_base <- function(final_outcomes, base_scenario) {
-  base_row <- final_outcomes %>% filter(scenario == base_scenario) %>% slice(1)
-  if (nrow(base_row) == 0) {
-    stop("base_scenario '",
-         base_scenario,
-         "' not found in final_outcomes.")
-  }
-  suffix   <- paste0("_vs_", base_scenario)
-  num_cols <- setdiff(names(final_outcomes), "scenario")
-  
-  final_outcomes %>%
-    mutate(across(all_of(num_cols), ~ .x - base_row[[cur_column()]])) %>%
-    rename_with(~ paste0("d_", sub("^(final_|cum_)", "", .x), suffix), all_of(num_cols)) %>%
-    select(scenario, starts_with("d_"))
-}
-
 # ================================================================================================ #
 
 # 7) Plot data preparation functions ####
@@ -1326,17 +1318,17 @@ make_final_outcomes_vs_base <- function(final_outcomes, base_scenario) {
 # Filtered to times strictly before longest_stabilisation.
 make_plot_long_states <- function(scenario_post, longest_stabilisation) {
   bind_rows(lapply(names(scenario_post), function(nm) {
-    scenario_post[[nm]] %>%
-      select(time, S, C, I, Xtest, FN, Xtreat, T1, T2, T3, T4, T5) %>%
-      filter(time < longest_stabilisation) %>%
+    scenario_post[[nm]] |>
+      select(time, S, C, I, Xtest, FN, Xtreat, T1, T2, T3, T4, T5) |>
+      filter(time < longest_stabilisation) |>
       pivot_longer(
         cols = c(S, C, I, Xtest, FN, Xtreat, T1, T2, T3, T4, T5),
         names_to = "state",
         values_to = "count"
-      ) %>%
+      ) |>
       mutate(scenario = nm,
              state = factor(state, levels = c("S", "C", "I", "Xtest", "FN", "Xtreat", "T1", "T2", "T3", "T4", "T5")))
-  })) %>%
+  })) |>
     add_scenario_facets()
 }
 
@@ -1344,34 +1336,34 @@ make_plot_long_states <- function(scenario_post, longest_stabilisation) {
 
 make_plot_long_bed_occupancy <- function(scenario_post, longest_stabilisation) {
   bind_rows(lapply(names(scenario_post), function(nm) {
-    scenario_post[[nm]] %>%
-      select(time, hospital_bed_occupancy, general_ward_bed_occupancy, side_room_bed_occupancy) %>%
-      filter(time < longest_stabilisation) %>%
+    scenario_post[[nm]] |>
+      select(time, hospital_bed_occupancy, general_ward_bed_occupancy, side_room_bed_occupancy) |>
+      filter(time < longest_stabilisation) |>
       pivot_longer(
         cols = c(hospital_bed_occupancy, general_ward_bed_occupancy, side_room_bed_occupancy),
         names_to = "bed_type",
         values_to = "occupancy"
-      ) %>%
+      ) |>
       mutate(scenario = nm)
-  })) %>%
+  })) |>
     add_scenario_facets()
 }
 
 ## c) Long-format flow data for (instantaneous) flows and cumulative plots ####
 
-# Collects lambda, all instantaneous rate outputs and all cumulative outputs from scenario_post into 
+# Collects lambda, all instantaneous rate outputs and all cumulative outputs from scenario_post into
 # a single combined data frame.
 # Uses tidy-select helpers so new ODE outputs are picked up automatically.
 
 make_plot_long_flows <- function(scenario_post) {
   bind_rows(lapply(names(scenario_post), function(nm) {
-    scenario_post[[nm]] %>%
+    scenario_post[[nm]] |>
       select(time,
              lambda,
              ends_with("_rate"),
-             starts_with("cum_")) %>%
+             starts_with("cum_")) |>
       mutate(scenario = nm)
-  })) %>%
+  })) |>
     add_scenario_facets()
 }
 
@@ -1385,8 +1377,8 @@ make_plot_long_flows <- function(scenario_post) {
 # so it can be overridden without editing the functions.
 
 model_colour_palette <- c(
-  
-  # States 
+
+  # States
   "S"      = "#66C2A5FF",
   "C"      = "#FC8D62FF",
   "I"      = "#8DA0CBFF",
@@ -1401,34 +1393,34 @@ model_colour_palette <- c(
   "T4"     = "#6B8F2AFF",
   "T5"     = "#7A6400FF",
   "D"      = "#B3B3B3FF",
-  
+
   # Bed occupancy
   "hospital_bed_occupancy"      = "#66C2A5FF",
   "general_ward_bed_occupancy" = "#8DA0CBFF",
   "side_room_bed_occupancy"  = "#FFD92FFF",
-  
+
   # Flows into C and I
   "colonised_in_hospital_rate" = "#FC8D62FF",
   "admitted_colonised_rate"    = "#FC8D62FF",
   "infected_in_hospital_rate" = "#8DA0CBFF",
   "admitted_infected_rate"    = "#8DA0CBFF",
-  
+
   # Case ascertainment flows
   "total_infected_incidence_rate"   = "#8DA0CBFF",
   "suspected_cases_rate"            = "#E78AC3FF",
   "false_negatives_rate"            = "#A6D854FF",
   "confirmed_cases_rate"            = "#FFD92FFF",
-  
+
   # Testing
   "first_test_rate"             = "grey80",
   "retest_false_negatives_rate" = "grey60",
   "total_test_rate"             = "grey40",
-  
+
   # Missed cases flows
   "missed_untested_cases_rate"       = "#8DA0CBFF",
   "missed_false_negative_cases_rate" = "#A6D854FF",
   "total_missed_cases_rate"          = "#B3B3B3FF",
-  
+
   # Deaths by state
   "deaths_susceptible_rate"     = "#66C2A5FF",
   "deaths_colonised_rate"       = "#FC8D62FF",
@@ -1436,14 +1428,14 @@ model_colour_palette <- c(
   "deaths_suspected_cases_rate" = "#E78AC3FF",
   "deaths_FN_rate"              = "#A6D854FF",
   "deaths_confirmed_cases_rate" = "#FFD92FFF",
-  
+
   # Discharges by state
   "discharges_susceptible_rate" = "#66C2A5FF",
   "discharges_colonised_rate"   = "#FC8D62FF",
   "discharges_infected_rate"    = "#8DA0CBFF",
   "discharges_FN_rate"          = "#A6D854FF",
   "discharges_recovered_rate"   = "#FFD92FFF",
-  
+
   # Case outcome flows
   "discharges_while_infected_rate"  = "#8DA0CBFF",
   "recovered_cases_rate"            = "#FFD92FFF",
@@ -1451,7 +1443,7 @@ model_colour_palette <- c(
 )
 
 model_pretty_labels <- c(
-  
+
   # States (line and area plots)
   "S"      = "Susceptible",
   "C"      = "Colonised",
@@ -1465,35 +1457,35 @@ model_pretty_labels <- c(
   "T4"     = "T4: false negative, awaiting ward (P3)",
   "T5"     = "T5: recovered, awaiting ward (P3)",
   "D"      = "Dead",
-  
+
   # Bed occupancy (line plot)
   "hospital_bed_occupancy"      = "All beds",
   "general_ward_bed_occupancy" = "General ward beds",
   "side_room_bed_occupancy"  = "Side-room beds",
-  
+
   # Flows into C and I (line plot)
   "colonised_in_hospital_rate" = "Colonisations in hospital",
   "admitted_colonised_rate"    = "Colonised admissions",
   "infected_in_hospital_rate"  = "Progressions to infection in hospital",
   "admitted_infected_rate"     = "Infected admissions",
-  
+
   # Case ascertainment flows (line plot)
   "total_infected_incidence_rate" = "Infected cases",
   "suspected_cases_rate"          = "Suspected cases",
   "false_negatives_rate"          = "False negatives",
   "retest_false_negatives_rate"   = "Retested false negatives",
   "confirmed_cases_rate"          = "Confirmed cases",
-  
+
   # Testing (line plot)
   "first_test_rate"             = "First tests",
   "retest_false_negatives_rate" = "Retests of false negatives",
   "total_test_rate"             = "Total tests",
-  
+
   # Missed cases flows (line plot)
   "missed_untested_cases_rate"       = "Missed cases (untested)",
   "missed_false_negative_cases_rate" = "Missed cases (false negatives)",
   "total_missed_cases_rate"          = "Total missed cases",
-  
+
   # Deaths by state (area plot)
   "deaths_susceptible_rate"     = "Susceptible",
   "deaths_colonised_rate"       = "Colonised",
@@ -1501,55 +1493,55 @@ model_pretty_labels <- c(
   "deaths_suspected_cases_rate" = "Suspected cases",
   "deaths_FN_rate"              = "False negatives",
   "deaths_confirmed_cases_rate" = "Confirmed cases",
-  
+
   # Discharges by state (area plot)
   "discharges_susceptible_rate" = "Susceptible",
   "discharges_colonised_rate"   = "Colonised",
   "discharges_infected_rate"    = "Infected",
   "discharges_FN_rate"          = "False negatives",
   "discharges_recovered_rate"   = "Recovered",
-  
+
   # Case outcome flows (area plot)
   "discharges_while_infected_rate"  = "Discharges from infected",
   "recovered_cases_rate"            = "Recovered cases",
   "deaths_post_infection_rate"      = "Deaths post-infection",
- 
+
   # Cumulative
-  
+
   # Cumulative bed occupancy (bar plots)
   "hospital_bed_days"        = "Total patient bed-days",
   "general_ward_bed_days" = "General ward patient bed-days",
   "side_room_bed_days"    = "Side-room patient bed-days",
   "side_room_Xtest_bed_days"  = "Side-room bed-days: suspected cases",
   "side_room_Xtreat_bed_days" = "Side-room bed-days: confirmed cases",
-  
+
   # Cumulative flows into C and I (bar plots)
   "cum_colonised_in_hospital"     = "Colonisations (in hospital)",
   "admitted_colonised"            = "Colonised admissions",
   "cum_infected_in_hospital"      = "Progressions to infection (in hospital)",
   "admitted_infected"             = "Infected admissions",
-  
+
   # Cumulative case ascertainment (bar plots)
   "cum_total_infected_incidence"   = "Infected cases",
   "cum_suspected_cases"            = "Suspected cases",
   "cum_false_negatives"            = "False negatives",
   "cum_retest_false_negatives"     = "Retested false negatives",
   "cum_confirmed_cases"            = "Confirmed cases",
-  
+
   # Cumulative testing (bar plots)
   "cum_first_test"             = "First tests",
   "cum_retest_false_negatives" = "Retests of false negatives",
   "cum_total_test"             = "Total tests",
-  
+
   # Cumulative missed cases (bar plots)
   "cum_missed_untested_cases"       = "Untested cases",
   "cum_missed_false_negative_cases" = "False negatives",
   "cum_total_missed_cases"          = "Total missed cases",
-  
+
   # Cumulative confirmed cases via first test vs retest (bar plots)
   "cum_confirmed_via_first_test"    = "Cases confirmed via first test",
   "cum_confirmed_via_retest"        = "Cases confirmed via retest",
-  
+
   # Cumulative deaths by state (bar plots)
   "cum_deaths_susceptible"     = "Susceptible",
   "cum_deaths_colonised"       = "Colonised",
@@ -1564,7 +1556,7 @@ model_pretty_labels <- c(
   "cum_discharges_infected"    = "Infected",
   "cum_discharges_FN"          = "False negatives",
   "cum_discharges_recovered"   = "Recovered",
-  
+
   # Cumulative case outcomes (bar plots)
   "cum_discharges_while_infected" = "Discharges while infected",
   "cum_recovered_cases"           = "Recovered cases",
@@ -1580,7 +1572,7 @@ model_pretty_labels <- c(
 # Saving to file is handled separately in the calling script via ggsave().
 
 # Text size (pt) for every plot in the report, the same in all sections (as the legend titles of the
-# section 14 grid plots). The QMD saves every plot 24 cm wide and shows it at the page width, so text
+# section 12 grid plots). The QMD saves every plot 24 cm wide and shows it at the page width, so text
 # appears the same size in every section.
 font_base_size <- 9
 
@@ -1621,8 +1613,8 @@ plot_states_line <- function(plot_long_states,
 plot_states_line_noS <- function(plot_long_states,
                              colour_palette = model_colour_palette,
                              pretty_labels  = model_pretty_labels) {
-  plot_long_states %>%
-    filter(state != "S") %>%
+  plot_long_states |>
+    filter(state != "S") |>
     ggplot(aes(time, count, color = state)) +
     geom_line(linewidth = 0.5) +
     example_facets +
@@ -1663,8 +1655,8 @@ plot_states_area <- function(plot_long_states,
 plot_states_area_noS <- function(plot_long_states,
                              colour_palette = model_colour_palette,
                              pretty_labels  = model_pretty_labels) {
-  plot_long_states %>%
-    filter(state != "S") %>%
+  plot_long_states |>
+    filter(state != "S") |>
     ggplot(aes(time, count, fill = state)) +
     geom_area() +
     example_facets +
@@ -1687,13 +1679,13 @@ plot_bed_occupancy <- function(plot_long_bed_occupancy,
                                longest_stabilisation,
                                colour_palette = model_colour_palette,
                                pretty_labels  = model_pretty_labels) {
-    plot_long_bed_occupancy %>%
+    plot_long_bed_occupancy |>
     filter(time < longest_stabilisation,
-           bed_type %in% c("general_ward_bed_occupancy", "side_room_bed_occupancy")) %>%
+           bed_type %in% c("general_ward_bed_occupancy", "side_room_bed_occupancy")) |>
     mutate(resource = factor(
       bed_type,
       levels = c("side_room_bed_occupancy",
-                 "general_ward_bed_occupancy"))) %>%
+                 "general_ward_bed_occupancy"))) |>
     ggplot(aes(x = time, y = occupancy, fill = resource)) +
     geom_area() +
     example_facets +
@@ -1708,7 +1700,8 @@ plot_bed_occupancy <- function(plot_long_bed_occupancy,
       fill  = NULL
     )
 }
-## g) New colonisations and infections - line plot ####
+
+## f) New colonisations and infections - line plot ####
 
 model_linetype_palette_C_and_I <- c(
   "colonised_in_hospital_rate" = "solid",
@@ -1724,38 +1717,38 @@ plot_flows_to_C_and_I <- function(plot_long_flows,
                                   linetype_palette = model_linetype_palette_C_and_I,
                                   pretty_labels    = model_pretty_labels) {
   # Compute y position from actual data range to avoid panel clipping
-  flow_data <- plot_long_flows %>%
-    filter(time < longest_stabilisation) %>%
+  flow_data <- plot_long_flows |>
+    filter(time < longest_stabilisation) |>
     select(colonised_in_hospital_rate, admitted_colonised_rate,
            infected_in_hospital_rate, admitted_infected_rate)
   y_min <- min(unlist(flow_data), na.rm = TRUE)
-  
+
   label_df <- if (!is.null(final_outcomes)) {
-    final_outcomes %>%
-      select(scenario, prop_I_hospital_attributable) %>%
-      add_scenario_facets() %>%
+    final_outcomes |>
+      select(scenario, prop_I_hospital_attributable) |>
+      add_scenario_facets() |>
       mutate(
         label = paste0("Hosp.-attributable CDI: ",
                        scales::percent(prop_I_hospital_attributable, accuracy = 0.1)),
         x_pos = 0,
-        y_pos = y_min + 2  
+        y_pos = y_min + 2
 ## !! May need to change y_pos ####
       )
   } else {
     NULL
   }
-  
-  p <- plot_long_flows %>%
-    filter(time < longest_stabilisation) %>%
+
+  p <- plot_long_flows |>
+    filter(time < longest_stabilisation) |>
     select(
       time, scenario, policy, setting,
       colonised_in_hospital_rate, admitted_colonised_rate,
       infected_in_hospital_rate,  admitted_infected_rate
-    ) %>%
-    pivot_longer(cols = -c(time, scenario, policy, setting), names_to = "flow", values_to = "value") %>%
+    ) |>
+    pivot_longer(cols = -c(time, scenario, policy, setting), names_to = "flow", values_to = "value") |>
     mutate(flow = factor(flow, levels = c(
       "colonised_in_hospital_rate", "admitted_colonised_rate",
-      "infected_in_hospital_rate",  "admitted_infected_rate"))) %>%
+      "infected_in_hospital_rate",  "admitted_infected_rate"))) |>
     ggplot(aes(time, value, color = flow, linetype = flow)) +
     geom_line(linewidth = 0.5) +
     example_facets +
@@ -1770,7 +1763,7 @@ plot_flows_to_C_and_I <- function(plot_long_flows,
       color    = "Flow type",
       linetype = "Flow type"
     )
-  
+
   if (!is.null(label_df)) {
     p <- p + geom_text(data = label_df,
                        aes(x = x_pos, y = y_pos, label = label),
@@ -1781,14 +1774,14 @@ plot_flows_to_C_and_I <- function(plot_long_flows,
   p
 }
 
-## h) Case incidence and ascertainment - line plot ####
+## g) Case incidence and ascertainment - line plot ####
 
 plot_case_ascertainment_line <- function(plot_long_flows,
                              longest_stabilisation,
                              colour_palette = model_colour_palette,
                              pretty_labels  = model_pretty_labels) {
-  plot_long_flows %>%
-    filter(time < longest_stabilisation) %>%
+  plot_long_flows |>
+    filter(time < longest_stabilisation) |>
     select(
       time,
       scenario, policy, setting,
@@ -1797,12 +1790,12 @@ plot_case_ascertainment_line <- function(plot_long_flows,
       confirmed_cases_rate,
       false_negatives_rate,
       retest_false_negatives_rate
-      ) %>%
+      ) |>
     pivot_longer(
       cols = -c(time, scenario, policy, setting),
       names_to = "flow",
       values_to = "value"
-    ) %>%
+    ) |>
     mutate(flow = factor(
       flow,
       levels = c(
@@ -1812,7 +1805,7 @@ plot_case_ascertainment_line <- function(plot_long_flows,
         "false_negatives_rate",
         "retest_false_negatives_rate"
       )
-    )) %>%
+    )) |>
     ggplot(aes(time, value, color = flow)) +
     geom_line(linewidth = 0.5) +
     example_facets +
@@ -1827,10 +1820,10 @@ plot_case_ascertainment_line <- function(plot_long_flows,
     )
 }
 
-## j) Faecal specimens tested per year: first tests and retests - stacked bar plot ####
+## h) Faecal specimens tested per year: first tests and retests - stacked bar plot ####
 
-# Stacked bar plots (sections j, m, n, s, u) show the example scenarios grouped by daily probability of testing and
-# sensitivity, with P1, P2 and P3 side by side (see plot_example_stacked() in section 11).
+# The stacked bar plots below (QMD section 14) show the example scenarios grouped by daily probability of
+# testing and sensitivity, with P1, P2 and P3 side by side (see plot_example_stacked() in section 10k).
 plot_testing_bar <- function(final_outcomes) {
   plot_example_stacked(final_outcomes,
                        components = c("First tests"                = "cum_first_test",
@@ -1840,7 +1833,7 @@ plot_testing_bar <- function(final_outcomes) {
                        colours = c("grey70", "grey40"))
 }
 
-## m) Missed cases per year: untested and false negatives - stacked bar plot ####
+## i) Missed cases per year: untested and false negatives - stacked bar plot ####
 
 plot_missed_cases_bar <- function(final_outcomes, colour_palette = model_colour_palette) {
   plot_example_stacked(final_outcomes,
@@ -1851,7 +1844,7 @@ plot_missed_cases_bar <- function(final_outcomes, colour_palette = model_colour_
                        colours = unname(colour_palette[c("I", "FN")]))
 }
 
-## n) Confirmed cases per year: via first test and retest - stacked bar plot ####
+## j) Confirmed cases per year: via first test and retest - stacked bar plot ####
 
 plot_case_confirmation_bar <- function(final_outcomes) {
   plot_example_stacked(final_outcomes,
@@ -1863,14 +1856,14 @@ plot_case_confirmation_bar <- function(final_outcomes) {
                        caption = "Retests are apportioned post hoc by the share of all tests that were retests.")
 }
 
-## p) Deaths by state - area plot (omitting susceptible) ####
+## k) Deaths by state - area plot (omitting susceptible) ####
 
 plot_deaths_by_state_area_noS <- function(plot_long_flows,
                              longest_stabilisation,
                              colour_palette = model_colour_palette,
                              pretty_labels  = model_pretty_labels) {
-  plot_long_flows %>%
-    filter(time < longest_stabilisation) %>%
+  plot_long_flows |>
+    filter(time < longest_stabilisation) |>
     select(
       time,
       scenario, policy, setting,
@@ -1879,12 +1872,12 @@ plot_deaths_by_state_area_noS <- function(plot_long_flows,
       deaths_suspected_cases_rate,
       deaths_FN_rate,
       deaths_confirmed_cases_rate
-    ) %>%
+    ) |>
     pivot_longer(
       cols = -c(time, scenario, policy, setting),
       names_to = "flow",
       values_to = "value"
-    ) %>%
+    ) |>
     mutate(flow = factor(
       flow,
       levels = c(
@@ -1894,7 +1887,7 @@ plot_deaths_by_state_area_noS <- function(plot_long_flows,
         "deaths_FN_rate",
         "deaths_confirmed_cases_rate"
       )
-    )) %>%
+    )) |>
     ggplot(aes(time, value, fill = flow)) +
     geom_area() +
     example_facets +
@@ -1909,14 +1902,14 @@ plot_deaths_by_state_area_noS <- function(plot_long_flows,
     )
 }
 
-## r) Discharges by state (except susceptible) - area plot ####
+## l) Discharges by state (except susceptible) - area plot ####
 
 plot_discharges_by_state_area_noS <- function(plot_long_flows,
                              longest_stabilisation,
                              colour_palette = model_colour_palette,
                              pretty_labels  = model_pretty_labels) {
-  plot_long_flows %>%
-    filter(time < longest_stabilisation) %>%
+  plot_long_flows |>
+    filter(time < longest_stabilisation) |>
     select(
       time,
       scenario, policy, setting,
@@ -1924,12 +1917,12 @@ plot_discharges_by_state_area_noS <- function(plot_long_flows,
       discharges_infected_rate,
       discharges_FN_rate,
       discharges_recovered_rate
-    ) %>%
+    ) |>
     pivot_longer(
       cols = -c(time, scenario, policy, setting),
       names_to = "flow",
       values_to = "value"
-    ) %>%
+    ) |>
     mutate(flow = factor(
       flow,
       levels = c(
@@ -1938,7 +1931,7 @@ plot_discharges_by_state_area_noS <- function(plot_long_flows,
         "discharges_FN_rate",
         "discharges_recovered_rate"
       )
-    )) %>%
+    )) |>
     ggplot(aes(time, value, fill = flow)) +
     geom_area() +
     example_facets +
@@ -1953,7 +1946,7 @@ plot_discharges_by_state_area_noS <- function(plot_long_flows,
     )
 }
 
-## s) Outcomes of CDI cases per year - stacked bar plot ####
+## m) Outcomes of CDI cases per year - stacked bar plot ####
 
 # Exits of CDI patients: discharged untreated, split into untested (from I) and after a false negative
 # result (from FN or T4), recovered after treatment (returned to a general ward or discharged from
@@ -1969,7 +1962,7 @@ plot_case_outcomes_bar <- function(final_outcomes, colour_palette = model_colour
                        colours = c(unname(colour_palette[c("I", "FN", "Xtreat")]), "#B3B3B3FF"))
 }
 
-## s2) Incident CDI cases per year by origin - stacked bar plot ####
+## n) Incident CDI cases per year by origin - stacked bar plot ####
 
 # Incident CDI cases split into admitted with CDI, hospital-onset CDI in patients admitted colonised,
 # and hospital-acquired CDI (estimated: hospital-onset CDI x the share of colonisations acquired in
@@ -1985,7 +1978,7 @@ plot_cdi_cases_by_origin_bar <- function(final_outcomes) {
                          colours = c("#B3B3B3FF", "#9ECAE1FF", "#08519CFF"))
 }
 
-## t2) Patient bed-days per year by bed type - stacked bar plot ####
+## o) Patient bed-days per year by bed type - stacked bar plot ####
 
 # General ward and side-room bed-days (suspected and confirmed cases combined: Xtest, T4 and T5 are
 # isolated under P3, Xtreat under P2 and P3, and T2 under P2). The stack is total patient bed-days.
@@ -2001,7 +1994,89 @@ plot_bed_days_bar <- function(patient_days_summary, colour_palette = model_colou
                                                          "side_room_bed_occupancy")]))
 }
 
-## u) Hospital-acquired colonisations by source per year - stacked bar plot ####
+## p) CDI patient-days by state and location per year - stacked bar plot ####
+
+# Patient-days per year with CDI (the states in CDI_census: I, Xtest, FN, Xtreat and the transfer states
+# T1, T3 and T4; recovered patients awaiting transfer, T2 and T5, do not have CDI). For each policy
+# within each example setting:
+#   - a wide stacked bar by state, with the states that can be in a side room at the top (Xtreat, T4,
+#     Xtest) and those always on a general ward towards the bottom (T1, FN, T3, I);
+#   - a thin stacked bar to its right by location: side room (top) and general ward (bottom).
+# I, FN, T1 (P2) and T3 (P3) are always on a general ward and T4 (P3) in a side room; Xtest is in a side
+# room under P3 only, and Xtreat under P2 and P3 (as in side_room_bed_occupancy in model_ode()).
+# The two bars have the same total. ggplot2 allows one fill legend per plot, so the bars share one fill
+# scale with no legend, and a legend for each (state, location) is drawn from its own plot and placed
+# beside the chart with cowplot. Returns a cowplot drawing (save with ggsave()).
+# Takes patient-days (from calculate_total_patient_days()), divided by the number of years.
+plot_cdi_patient_days_bar <- function(patient_days_summary, colour_palette = model_colour_palette) {
+  # States, bottom to top of the bar
+  states <- c("Infected, untested (I)"             = "I",
+              "Awaiting side room, suspected (T3)" = "T3",
+              "False negative (FN)"                = "FN",
+              "Awaiting side room, confirmed (T1)" = "T1",
+              "Suspected case (Xtest)"             = "Xtest",
+              "Awaiting ward, false negative (T4)" = "T4",
+              "Confirmed case (Xtreat)"            = "Xtreat")
+  state_colours    <- set_names(unname(colour_palette[states]), names(states))
+  location_colours <- c("General ward" = "grey80", "Side room" = "grey35")
+
+  d <- patient_days_summary |>
+    add_scenario_facets(short = TRUE) |>
+    mutate(
+      x    = as.integer(policy_code),
+      side = if_else(policy_code == "P3", Xtest_patient_days, 0) +
+             if_else(policy_code == "P1", 0, Xtreat_patient_days) +
+             T4_patient_days,
+      cdi  = I_patient_days + T3_patient_days + FN_patient_days + T1_patient_days +
+             Xtest_patient_days + T4_patient_days + Xtreat_patient_days,
+      ward = cdi - side
+    )
+  # ggplot2 stacks the first factor level at the top, so levels run top to bottom
+  state_long <- d |>
+    select(setting, x, all_of(paste0(states, "_patient_days"))) |>
+    pivot_longer(-c(setting, x), names_to = "state", values_to = "value") |>
+    mutate(state = factor(names(states)[match(sub("_patient_days$", "", state), states)],
+                          levels = rev(names(states))))
+  location_long <- d |>
+    transmute(setting, x, "Side room" = side, "General ward" = ward) |>
+    pivot_longer(-c(setting, x), names_to = "location", values_to = "value") |>
+    mutate(location = factor(location, levels = c("Side room", "General ward")))
+
+  base_theme <- theme_classic(base_size = font_base_size) + my_theme
+  chart <- ggplot() +
+    geom_col(data = state_long, aes(x - 0.1, value, fill = state), width = 0.62) +
+    geom_col(data = location_long, aes(x + 0.33, value, fill = location), width = 0.14) +
+    facet_grid(~ setting, switch = "x") +
+    scale_fill_manual(values = c(state_colours, location_colours), guide = "none") +
+    scale_x_continuous(NULL, breaks = 1:3, labels = levels(d$policy_code)) +
+    scale_y_continuous("CDI patient-days per year", labels = scales::comma) +
+    base_theme +
+    theme(strip.placement = "outside", strip.background.x = element_blank(),
+          plot.caption = element_text(size = font_base_size, hjust = 0), plot.caption.position = "plot") +
+    labs(title = "CDI patient-days per year by state (wide bars) and location (thin bars)",
+         caption = stringr::str_wrap(paste(
+           "P1: no isolation; P2: confirmed cases isolated; P3: suspected and confirmed cases isolated.",
+           "Testing: daily probability of an untested CDI case being sent for testing; Sens.: test sensitivity.",
+           "Xtest is in a side room under P3 only, Xtreat under P2 and P3, and T4 under P3; the other states are on a general ward.",
+           "Recovered patients awaiting transfer (T2, T5) do not have CDI and are not included."), 115))
+
+  # Legend of one plot (the guide box that is not empty)
+  legend_of <- function(df, var, title, values) {
+    g <- ggplotGrob(ggplot(df, aes(x, value, fill = .data[[var]])) + geom_col() +
+                      scale_fill_manual(title, values = values, breaks = levels(df[[var]])) +
+                      base_theme)
+    box <- which(grepl("^guide-box", g$layout$name) &
+                   !vapply(g$grobs, inherits, logical(1), "zeroGrob"))
+    g$grobs[[box[1]]]
+  }
+  legends <- cowplot::plot_grid(legend_of(state_long, "state", "State", state_colours),
+                                legend_of(location_long, "location", "Location", location_colours),
+                                ncol = 1, rel_heights = c(7, 3), align = "v")
+  cowplot::plot_grid(chart, legends, nrow = 1, rel_widths = c(1, 0.36)) +
+    theme(plot.background = element_rect(fill = "white", colour = NA))
+}
+
+## q) Hospital-acquired colonisations by source per year - stacked bar plot ####
 
 # Stacks hospital-acquired colonisations (S -> C) from background acquisition (beta0) and
 # patient-to-patient transmission (secondary colonisations) from each state. The stacks sum to
@@ -2032,25 +2107,6 @@ plot_colonisation_sources_bar <- function(final_outcomes, colour_palette = model
                                    tint(colour_palette[["FN"]]),     unname(colour_palette["FN"]),
                                    tint(colour_palette[["Xtreat"]]), unname(colour_palette["Xtreat"])),
                        caption = "Background acquisition does not depend on the number of patients in each state (modelling simplification). Transfer states are shown in a lighter shade of the state they belong to.")
-}
-
-## t) Control parameter values - scatter plot ####
-
-plot_scenario_params <- function(control_parms) {
-  control_parms |>
-    mutate(isolation_policy = factor(isolation_policy, levels = isolation_policy_levels)) |>
-    ggplot(aes(test_sens, sent_factor(prob_test_daily))) +
-    geom_point() +
-    geom_text(aes(label = scenario), vjust = -0.7, size = font_base_size / .pt) +
-    facet_wrap(~ isolation_policy, labeller = as_labeller(isolation_policy_labels), axes = "all_y") +
-    theme_classic(base_size = font_base_size) +
-    my_theme +
-    scale_x_continuous(limits = c(0, 1.1), labels = scales::percent) +
-    labs(
-      title = "Values of control parameters",
-      x     = "Test sensitivity",
-      y     = sent_axis_label_wrapped
-    )
 }
 
 # ================================================================================================ #
@@ -2125,7 +2181,7 @@ make_scenario_grid <- function(isolation_policy, prob_test_daily, test_sens) {
     )
 }
 
-## b2) Mean waits from symptom onset to first test and to start of treatment ####
+## c) Mean waits from symptom onset to first test and to start of treatment ####
 
 # The CDI pathway (I, T3, Xtest, FN, T4, T1) is a continuous-time Markov chain with constant rates, so
 # the mean time from CDI symptom onset (entry to I) to first entering `target` ("Xtest": specimen taken,
@@ -2174,7 +2230,7 @@ mean_wait_to_state <- function(parms, target = c("Xtest", "Xtreat")) {
   })
 }
 
-## c) Run every grid scenario, keeping summaries only ####
+## d) Run every grid scenario, keeping summaries only ####
 
 # A full post-processed time series is thousands of rows x ~170 columns per scenario, so keeping one for
 # every grid scenario would use a lot of memory. Each run is summarised as soon as it finishes;
@@ -2235,7 +2291,7 @@ run_scenario_grid <- function(grid, time_step, burn_in = 0, n_cores = 1) {
   set_names(lapply(parts, \(x) bind_rows(map(runs, x))), parts)
 }
 
-## d) Combine grid inputs and cumulative outcomes ####
+## e) Combine grid inputs and cumulative outcomes ####
 
 # One row per scenario: control values, final cumulative outcomes, patient-days and the derived
 # outcomes from add_derived_outcomes() (proportions, prevalence differences, specimens per
@@ -2247,9 +2303,9 @@ make_grid_results <- function(grid, grid_runs) {
     add_derived_outcomes()
 }
 
-## e) Outcomes compared across the grid ####
+## f) Outcomes compared across the grid ####
 
-# The research question outcomes compared across the daily probability of testing and test sensitivity (sections 14
+# The research question outcomes compared across the daily probability of testing and test sensitivity (sections 12
 # and 15 of the QMD), numbered as in the research questions. Counts (fmt "n") are shown as annual
 # totals (mean per year of the analysis period after the burn-in). Definitions:
 #   - CDI cases: all incident cases, admitted with CDI plus hospital-onset.
@@ -2265,9 +2321,10 @@ make_grid_results <- function(grid, grid_runs) {
 #     no testing (and, for treatment, at 0% sensitivity).
 #   - Not included: colonisation and CDI prevalence at admission (Outcome B3; fixed inputs, the same in every
 #     scenario) and confirmed cases started on treatment (Outcome C7; equal to Outcome A5, n).
-# fmt sets how values are labelled: "n" (counts), "rate" (one decimal place), "pct" (percent),
-# "pp" (percentage points) or "days" (one decimal place).
-# plot = TRUE: plotted in the QMD's section 14 tabs (outcomes by daily probability of testing and test
+# fmt sets how values are labelled: "n" (counts), "rate" (per confirmed case, one decimal place),
+# "per10k" (per 10,000 patient bed-days, one decimal place), "pct" (percent), "pp" (percentage points)
+# or "days" (one decimal place).
+# plot = TRUE: plotted in the QMD's section 12 tabs (outcomes by daily probability of testing and test
 # sensitivity).
 # gain = TRUE: plotted in the QMD's section 15 tabs (change due to increasing test sensitivity), reported
 # as set by direction:
@@ -2305,7 +2362,12 @@ grid_outcome_spec <- tribble(
   "cum_deaths_post_infection",     "Outcome D3: CDI cases died in hospital",                                          "n",    TRUE,  TRUE,  "avoided",
   "cum_deaths_CDI_attributable",   "Outcome D4: CDI-attributable deaths in hospital",                                 "n",    TRUE,  TRUE,  "avoided",
   "mean_wait_test",                "Outcome D5: Mean time from CDI symptom onset to first test, among cases tested",  "days", TRUE,  TRUE,  "avoided",
-  "mean_wait_treatment",           "Outcome D6: Mean time from CDI symptom onset to treatment, among cases treated",  "days", TRUE,  TRUE,  "avoided"
+  "mean_wait_treatment",           "Outcome D6: Mean time from CDI symptom onset to treatment, among cases treated",  "days", TRUE,  TRUE,  "avoided",
+  "rate_cdi_actual",               "Outcome E1: Actual CDI incidence per 10,000 patient bed-days",                    "per10k", TRUE, TRUE, "avoided",
+  "rate_cdi_observed",             "Outcome E1: Observed (detected) CDI incidence per 10,000 patient bed-days",       "per10k", TRUE, TRUE, "additional",
+  "rate_ho_actual",                "Outcome E2: Actual hospital-onset CDI incidence per 10,000 patient bed-days",     "per10k", TRUE, TRUE, "avoided",
+  "rate_ho_observed",              "Outcome E2: Observed (detected) hospital-onset CDI incidence per 10,000 patient bed-days (estimated)", "per10k", TRUE, TRUE, "additional",
+  "rate_tests",                    "Outcome E3: Faecal specimens tested per 10,000 patient bed-days",                 "per10k", TRUE, TRUE, "avoided"
 )
 
 # y-axis label for each value format
@@ -2315,11 +2377,12 @@ fmt_axis_label <- function(fmt) {
     pct  = "Proportion",
     pp   = "Percentage points",
     rate = "Per confirmed case",
+    per10k = "Per 10,000 patient bed-days",
     days = "Days",
     "Value")
 }
 
-## f) Long-format grid outcomes and policy differences ####
+## g) Long-format grid outcomes and policy differences ####
 
 # One row per scenario and outcome. Counts (fmt "n" in spec) are divided by `years` (the length of
 # the analysis period) to give annual totals; proportions and ratios are unchanged.
@@ -2351,7 +2414,7 @@ make_grid_diffs <- function(grid_long, comparisons = policy_comparisons) {
     mutate(comparison = factor(comparison, levels = comparisons$label))
 }
 
-## g) Grid plots ####
+## h) Grid plots ####
 
 # Same text size as the other plots (font_base_size); every text element is set to it, including axis and
 # legend text, which theme_classic() would otherwise make smaller.
@@ -2374,7 +2437,7 @@ grid_theme <- theme_classic(base_size = grid_font_size) +
 
 # Axis/legend label for prob_test_daily: the daily probability that an untested CDI case is sent for testing
 # (gamma = -log(1 - prob_test_daily); see make_mod_parms()). The grid values are unevenly spaced, so the
-# section 14 plots show it as a categorical axis or legend. (Objects below keep "sent" in their names.)
+# section 12 plots show it as a categorical axis or legend. (Objects below keep "sent" in their names.)
 sent_axis_label         <- "Daily probability of an untested CDI case being sent for testing"
 sent_axis_label_wrapped <- "Daily probability of an untested\nCDI case being sent for testing"
 
@@ -2406,15 +2469,38 @@ sent_factor <- function(x) {
 }
 
 # Axis and legend label functions by value format; diff = TRUE for differences between policies
-# or test sensitivities (percentages are then differences in percentage points)
+# (percentages are then differences in percentage points). Differences are labelled with as many
+# decimal places as the breaks need to differ (accuracy = NULL), so a small range is never labelled
+# "0.0 pp" to "0.0 pp"; diff_axis_floor() stops small differences being stretched to fill the axis.
 fmt_labels <- function(fmt, diff = FALSE) {
+  if (diff) {
+    return(switch(fmt,
+      pct = , pp = scales::label_number(scale = 100, suffix = " pp", style_positive = "plus"),
+      scales::label_number(big.mark = ",", style_positive = "plus")))
+  }
   switch(fmt,
-    pct  = if (diff) scales::label_number(scale = 100, accuracy = 0.1, suffix = " pp", style_positive = "plus")
-           else scales::label_percent(accuracy = 1),
-    pp   = scales::label_number(scale = 100, accuracy = 0.1, suffix = " pp", style_positive = "plus"),
-    rate = scales::label_number(accuracy = 0.1, big.mark = ",", style_positive = if (diff) "plus" else "none"),
-    days = scales::label_number(accuracy = 0.1, style_positive = if (diff) "plus" else "none"),
-    scales::label_comma(style_positive = if (diff) "plus" else "none"))
+    pct    = scales::label_percent(accuracy = 1),
+    pp     = scales::label_number(scale = 100, accuracy = 0.1, suffix = " pp", style_positive = "plus"),
+    rate   = , per10k = , days = scales::label_number(accuracy = 0.1, big.mark = ","),
+    scales::label_comma())
+}
+
+# Smallest half-range of the axis (line plots) or colour scale (heatmaps) for differences between
+# policies, as a share of the largest absolute value of the outcome itself across the grid. The axis
+# always spans at least -floor to +floor, so a difference smaller than this share of the outcome looks
+# small rather than filling the panel, while larger differences use the full axis. E.g. with 0.02, an
+# outcome reaching 400 cases per year has an axis of at least -8 to +8 cases per year.
+diff_axis_min_share <- 0.02
+
+diff_axis_floor <- function(grid_long, outcome_var, share = diff_axis_min_share) {
+  v <- abs(grid_long$value[grid_long$outcome == outcome_var])
+  m <- suppressWarnings(max(v, na.rm = TRUE))
+  if (is.finite(m)) share * m else 0
+}
+
+# "±x" text for the floor, in the outcome's difference units
+diff_floor_text <- function(floor, fmt) {
+  paste0("±", sub("^\\+", "", fmt_labels(fmt, diff = TRUE)(signif(floor, 2))))
 }
 
 spec_row <- function(spec, outcome_var) spec[spec$variable == outcome_var, ]
@@ -2459,13 +2545,20 @@ blank_first_panel <- function(p) {
 
 # One panel per comparison with the reference policy (P2 vs P1, P3 vs P1), placed under P2 and P3 in
 # the line plot of totals: the first panel (where P1 vs P1 would be) is left empty. Each panel has
-# its own y axis. Negative = less of the outcome than under P1. Returns a gtable.
+# its own y axis. Negative = less of the outcome than under P1. The y axis spans at least
+# -min_half_range to +min_half_range (see diff_axis_floor()). Returns a gtable.
 plot_grid_diff_lines <- function(grid_diffs,
                                  outcome_var,
                                  sent    = grid_line_sent,
                                  spec        = grid_outcome_spec,
-                                 comparisons = ref_comparisons()) {
+                                 comparisons = ref_comparisons(),
+                                 min_half_range = 0) {
   s <- spec_row(spec, outcome_var)
+  subtitle <- if (s$fmt == "n") "Difference per year (negative = fewer than P1)" else "Difference (negative = lower than P1)"
+  if (min_half_range > 0) {
+    subtitle <- paste0(subtitle, "; y axis spans at least ", diff_floor_text(min_half_range, s$fmt),
+                       " (", scales::percent(diff_axis_min_share), " of the largest value of the outcome)")
+  }
   p <- grid_diffs |>
     filter(outcome == outcome_var, comparison %in% comparisons) |>
     filter_line_sent(sent) |>
@@ -2479,8 +2572,9 @@ plot_grid_diff_lines <- function(grid_diffs,
     grid_sent_colour +
     scale_x_continuous("Test sensitivity", labels = scales::percent) +
     scale_y_continuous(NULL, labels = fmt_labels(s$fmt, diff = TRUE)) +
+    expand_limits(y = c(-min_half_range, min_half_range)) +
     labs(title    = paste0(s$label, ": differences from P1 (no isolation)"),
-         subtitle = if (s$fmt == "n") "Difference per year (negative = fewer than P1)" else "Difference (negative = lower than P1)") +
+         subtitle = stringr::str_wrap(subtitle, 110)) +
     grid_theme
   blank_first_panel(p)
 }
@@ -2515,21 +2609,25 @@ plot_grid_outcome_heatmap <- function(grid_long, outcome_var, spec = grid_outcom
 ### iv) Heatmap of differences from the reference policy ####
 
 # P2 vs P1 and P3 vs P1, laid out like plot_grid_outcome_heatmap() with the first panel (under P1)
-# left empty and a y axis on each panel. Yellow = largest negative difference (most reduction),
-# purple = largest positive difference. Returns a gtable.
+# left empty and a y axis on each panel. Diverging colour scale centred on no difference (white):
+# orange = lower than P1, purple = higher, symmetric about 0 and spanning at least
+# -min_half_range to +min_half_range (see diff_axis_floor()), so small differences stay pale.
+# Returns a gtable.
 plot_grid_diff_heatmap <- function(grid_diffs, outcome_var, spec = grid_outcome_spec,
-                                   comparisons = ref_comparisons()) {
+                                   comparisons = ref_comparisons(), min_half_range = 0) {
   s <- spec_row(spec, outcome_var)
-  p <- grid_diffs |>
+  d <- grid_diffs |>
     filter(outcome == outcome_var, comparison %in% comparisons) |>
-    mutate(comparison = factor(as.character(comparison), levels = c(" ", comparisons))) |>
+    mutate(comparison = factor(as.character(comparison), levels = c(" ", comparisons)))
+  lim <- max(suppressWarnings(max(abs(d$diff), na.rm = TRUE)), min_half_range, 1e-12)
+  p <- d |>
     ggplot(aes(test_sens, sent_factor(prob_test_daily), fill = diff)) +
     geom_tile() +
     facet_wrap(~ comparison, drop = FALSE, axes = "all_y") +
-    scale_fill_viridis_c(
+    scale_fill_gradient2(
       if (s$fmt == "n") "Difference per year from P1 (negative = fewer)" else "Difference from P1 (negative = lower)",
+      low = "#B35806", mid = "white", high = "#542788", midpoint = 0, limits = c(-lim, lim),
       labels    = fmt_labels(s$fmt, diff = TRUE),
-      direction = -1,
       guide     = guide_colourbar(barwidth = unit(6, "cm"), barheight = unit(0.3, "cm"))
     ) +
     scale_x_continuous("Test sensitivity", labels = scales::percent, expand = c(0, 0)) +
@@ -2545,11 +2643,12 @@ plot_grid_diff_heatmap <- function(grid_diffs, outcome_var, spec = grid_outcome_
 plot_grid_heatmaps_with_diffs <- function(grid_long, grid_diffs, outcome_var,
                                           spec = grid_outcome_spec) {
   cowplot::plot_grid(plot_grid_outcome_heatmap(grid_long, outcome_var, spec = spec),
-                     plot_grid_diff_heatmap(grid_diffs, outcome_var, spec = spec),
+                     plot_grid_diff_heatmap(grid_diffs, outcome_var, spec = spec,
+                                            min_half_range = diff_axis_floor(grid_long, outcome_var)),
                      ncol = 1, align = "v", axis = "lr")
 }
 
-## h) Change in outcomes from improving test sensitivity ####
+## i) Change in outcomes from improving test sensitivity ####
 
 # How the change is reported for each outcome is set by the direction column of grid_outcome_spec
 # (see there). Titles are built from the label: counts "avoided" or "additional" (e.g. "Outcome A1: Incident CDI
@@ -2562,8 +2661,8 @@ lower_first <- function(x) {
 
 sensitivity_gain_spec <- grid_outcome_spec |>
   mutate(
-    code  = sub("^(Outcome [A-D]\\d+:) .*$", "\\1", label),
-    text  = sub("^Outcome [A-D]\\d+: ", "", label),
+    code  = sub("^(Outcome [A-E]\\d+:) .*$", "\\1", label),
+    text  = sub("^Outcome [A-E]\\d+: ", "", label),
     title = case_when(
       fmt == "n" & direction == "avoided"    ~ paste(code, text, "avoided"),
       fmt == "n" & direction == "additional" ~ paste(code, "Additional", lower_first(text)),
@@ -2622,7 +2721,7 @@ gain_labels <- function(fmt) {
   switch(fmt,
     pct  = scales::label_number(scale = 100, accuracy = 0.1, suffix = " pp", style_positive = "plus"),
     pp   = scales::label_number(scale = 100, accuracy = 0.01, suffix = " pp", style_positive = "plus"),
-    rate = scales::label_number(accuracy = 0.01),
+    rate = , per10k = scales::label_number(accuracy = 0.01),
     days = scales::label_number(accuracy = 0.01, suffix = " d"),
     scales::label_comma(accuracy = 1))
 }
@@ -2633,7 +2732,7 @@ value_labels <- function(fmt) {
   switch(fmt,
     pct  = scales::label_percent(accuracy = 0.1),
     pp   = scales::label_number(scale = 100, accuracy = 0.01, suffix = " pp", style_positive = "plus"),
-    rate = scales::label_number(accuracy = 0.01),
+    rate = , per10k = scales::label_number(accuracy = 0.01),
     days = scales::label_number(accuracy = 0.01, suffix = " d"),
     scales::label_comma(accuracy = 1))
 }
@@ -2783,12 +2882,48 @@ plot_sensitivity_levels <- function(grid_long, outcome_var, sens_from, sens_to, 
     grid_theme
 }
 
+# Actual and observed (detected) CDI incidence per 10,000 patient bed-days (Outcome E1, all CDI, top row;
+# Outcome E2, hospital-onset CDI, bottom row) against prob_test_daily (log scale, values above 0), one
+# column per isolation policy, one colour per test sensitivity in `sens` (must be grid values); actual
+# solid, observed dashed. The gap between them is the CDI cases not detected; observed / actual is the
+# proportion of incident CDI cases confirmed (Outcome A5). With no testing, nothing is observed.
+plot_actual_vs_observed <- function(grid_long, sens = c(0.5, 0.8, 1)) {
+  type_labels <- c(cdi = "Outcome E1: All CDI", ho = "Outcome E2: Hospital-onset CDI")
+  policy_labeller <- set_names(stringr::str_wrap(isolation_policy_labels, 30), names(isolation_policy_labels))
+  grid_long |>
+    filter(outcome %in% c("rate_cdi_actual", "rate_cdi_observed", "rate_ho_actual", "rate_ho_observed"),
+           round(test_sens, 6) %in% round(sens, 6), prob_test_daily > 0) |>
+    mutate(outcome = as.character(outcome),
+           measure = factor(if_else(grepl("actual", outcome), "Actual", "Observed (detected)"),
+                            levels = c("Actual", "Observed (detected)")),
+           type    = factor(type_labels[sub("^rate_(cdi|ho)_.*$", "\\1", outcome)], levels = type_labels),
+           sens    = factor(scales::percent(test_sens), levels = scales::percent(sort(sens)))) |>
+    ggplot(aes(prob_test_daily, value, colour = sens, linetype = measure,
+               group = interaction(sens, measure))) +
+    geom_line(linewidth = 0.6) +
+    geom_point(size = 0.7) +
+    facet_grid(type ~ isolation_policy, scales = "free_y",
+               labeller = labeller(isolation_policy = as_labeller(policy_labeller))) +
+    expand_limits(y = 0) +
+    scale_colour_viridis_d("Test sensitivity", end = 0.85) +
+    scale_linetype_manual(NULL, values = c("solid", "dashed")) +
+    scale_x_continuous(paste0(sent_axis_label, " (log scale)"), transform = sent_log_trans,
+                       breaks = sent_log_breaks, labels = fmt_prob) +
+    scale_y_continuous("Per 10,000 patient bed-days", labels = scales::label_number(accuracy = 0.1)) +
+    labs(title = "Actual and observed (detected) CDI incidence per 10,000 patient bed-days",
+         caption = stringr::str_wrap(paste(
+           "Observed hospital-onset CDI is estimated: confirmed cases x the hospital-onset share of incident CDI cases.",
+           "With no testing (not shown on the log scale), no cases are observed."), 150)) +
+    grid_theme +
+    theme(plot.caption = element_text(hjust = 0), plot.caption.position = "plot")
+}
+
 # Forest-style chart of the arc elasticities (see make_sensitivity_gain()) for every outcome, in outcome
 # label order (Outcome A1 at the top), one panel per daily probability of testing in `sent` (panel
 # headings "0.03", "0.40" under one shared heading). Each policy is a square (colours as policy_colours,
 # spaced apart vertically so they don't overlap, P1 at the top). Reference
 # lines at 0 (no response) and -1 / +1 (response in proportion to sensitivity); solid grey lines separate
-# the outcome groups A-D. Outcomes with no elasticity under any policy (the differences in prevalence,
+# the outcome groups A-E. Outcomes with no elasticity under any policy (the differences in prevalence,
 # fmt "pp") are left out.
 plot_elasticities <- function(gain, sens_from, sens_to, sent = c(0.03, 0.40), spec = sensitivity_gain_spec) {
   keep <- spec |> filter(fmt != "pp")
@@ -2797,7 +2932,7 @@ plot_elasticities <- function(gain, sens_from, sens_to, sent = c(0.03, 0.40), sp
     filter_line_sent(sent) |>
     mutate(label = factor(keep$label[match(outcome, keep$variable)], levels = rev(keep$label)),
            sent  = factor(fmt_prob(prob_test_daily), levels = fmt_prob(sort(sent))))
-  # Row positions where the outcome group (A-D) changes, counted from the bottom
+  # Row positions where the outcome group (A-E) changes, counted from the bottom
   grp <- substr(sub("^Outcome ", "", rev(keep$label)), 1, 1)
   group_breaks <- which(grp[-1] != grp[-length(grp)]) + 0.5
 
@@ -2834,7 +2969,7 @@ plot_elasticities <- function(gain, sens_from, sens_to, sent = c(0.03, 0.40), sp
           legend.location = "plot", legend.justification = "left")
 }
 
-## i) Rates per 10,000 patient bed-days, side-room use and missed cases (section 13 tabs) ####
+## j) Rates per 10,000 patient bed-days, side-room use and missed cases (QMD section 11) ####
 
 # Rates per 10,000 patient bed-days use cases and bed-days over the same analysis period, so they
 # are the same whether calculated per year or over the whole period.
@@ -2843,52 +2978,54 @@ plot_elasticities <- function(gain, sens_from, sens_to, sent = c(0.03, 0.40), sp
 # rates, whatever their origin, so the model cannot track which missed cases were admitted with CDI,
 # hospital-onset or hospital-acquired. Missed cases are apportioned by each origin's share of CDI
 # cases; the proportion missed is therefore the same for every origin.
+# Most columns are derived outcomes already added by add_derived_outcomes(); make_grid_rates() adds
+# the hospital-acquired CDI rate and the missed cases by origin.
 rate_spec <- tribble(
-  ~variable,          ~label,                                                         ~fmt,
-  "rate_cdi",         "CDI cases per 10,000 patient bed-days",                        "rate",
-  "rate_ho",          "Hospital-onset CDI cases per 10,000 patient bed-days",         "rate",
-  "rate_ha",          "Hospital-acquired CDI cases per 10,000 patient bed-days",      "rate",
-  "rate_tests",       "Faecal specimens tested per 10,000 patient bed-days",          "rate",
-  "prop_side_room",   "Patient bed-days in a side room (%)",                          "pct",
-  "prop_missed",      "CDI cases missed (%)",                                         "pct",
-  "missed_admitted",  "Missed CDI cases per year: admitted with CDI",                 "n",
-  "missed_ho",        "Missed CDI cases per year: hospital-onset",                    "n",
-  "missed_ha",        "Missed CDI cases per year: hospital-acquired (part of hospital-onset)", "n"
+  ~variable,                 ~label,                                                         ~fmt,
+  "rate_cdi_actual",         "CDI cases per 10,000 patient bed-days",                        "per10k",
+  "rate_ho_actual",          "Hospital-onset CDI cases per 10,000 patient bed-days",         "per10k",
+  "rate_ha",                 "Hospital-acquired CDI cases per 10,000 patient bed-days",      "per10k",
+  "rate_tests",              "Faecal specimens tested per 10,000 patient bed-days",          "per10k",
+  "prop_side_room_bed_days", "Patient bed-days in a side room (%)",                          "pct",
+  "prop_missed",             "CDI cases missed (%)",                                         "pct",
+  "missed_admitted",         "Missed CDI cases per year: admitted with CDI",                 "n",
+  "missed_ho",               "Missed CDI cases per year: hospital-onset",                    "n",
+  "missed_ha",               "Missed CDI cases per year: hospital-acquired (part of hospital-onset)", "n"
 )
 
-# Adds the rate_spec columns to grid_results. years = length of the analysis period, used for the
-# missed-case counts per year.
-make_grid_rates <- function(grid_results, years) {
-  per_10k <- function(n, bed_days) if_else(bed_days > 0, 1e4 * n / bed_days, NA_real_)
-  share   <- function(n, d) if_else(d > 0, n / d, NA_real_)
-  grid_results |>
+# Adds the rate_spec columns not already in grid_annual (annual grid outcomes from
+# make_grid_results(), so counts are already per year).
+make_grid_rates <- function(grid_annual) {
+  share <- function(n, d) if_else(d > 0, n / d, NA_real_)
+  grid_annual |>
     mutate(
-      rate_cdi        = per_10k(cum_total_infected_incidence, hospital_bed_days),
-      rate_ho         = per_10k(cum_infected_in_hospital,     hospital_bed_days),
-      rate_ha         = per_10k(cum_hospital_attributable_I,  hospital_bed_days),
-      rate_tests      = per_10k(cum_total_test,               hospital_bed_days),
-      prop_side_room  = share(side_room_bed_days, hospital_bed_days),
-      prop_missed     = share(cum_total_missed_cases, cum_total_infected_incidence),
-      missed_admitted = cum_total_missed_cases * share(cum_admitted_infected,       cum_total_infected_incidence) / years,
-      missed_ho       = cum_total_missed_cases * share(cum_infected_in_hospital,    cum_total_infected_incidence) / years,
-      missed_ha       = cum_total_missed_cases * share(cum_hospital_attributable_I, cum_total_infected_incidence) / years
+      rate_ha         = share(1e4 * cum_hospital_attributable_I, hospital_bed_days),
+      missed_admitted = cum_total_missed_cases * share(cum_admitted_infected,       cum_total_infected_incidence),
+      missed_ho       = cum_total_missed_cases * share(cum_infected_in_hospital,    cum_total_infected_incidence),
+      missed_ha       = cum_total_missed_cases * share(cum_hospital_attributable_I, cum_total_infected_incidence)
     )
 }
 
-## j) Example scenario facets (section 12) ####
+## k) Example scenario facets and stacked bar plots (QMD sections 10 and 14) ####
 
 # Adds `policy` (P1-P3 labels) and `setting` (daily probability of testing and sensitivity) columns to a
 # data frame with a scenario column, parsed from scenario labels such as "P2_confirmed_test007_sens100".
 # `settings` is a data frame of prob_test_daily and test_sens giving the order of the settings (by default
 # the example_settings defined in the QMD; otherwise sorted by daily probability of testing then
-# sensitivity).
-example_setting_label <- function(sent, sens) {
-  paste0("Daily prob. of testing ", fmt_prob(sent), "\nsensitivity ", round(100 * sens), "%")
+# sensitivity). short = TRUE gives short labels (e.g. "Testing 0.03\nSens. 50%") for the narrow group
+# labels under the stacked bar plots; the plot caption explains the abbreviations.
+example_setting_label <- function(sent, sens, short = FALSE) {
+  if (short) {
+    paste0("Testing ", fmt_prob(sent), "\nSens. ", round(100 * sens), "%")
+  } else {
+    paste0("Daily prob. of testing ", fmt_prob(sent), "\nsensitivity ", round(100 * sens), "%")
+  }
 }
 
 add_scenario_facets <- function(df,
                                 settings = get0("example_settings", envir = globalenv(),
-                                                ifnotfound = NULL)) {
+                                                ifnotfound = NULL),
+                                short = FALSE) {
   parts <- regmatches(df$scenario, regexec("^(P\\d)_.+_test(\\d{3})_sens(\\d{3})$", df$scenario))
   code  <- vapply(parts, \(x) if (length(x)) x[2] else NA_character_, "")
   sent  <- vapply(parts, \(x) if (length(x)) as.numeric(x[3]) / 100 else NA_real_, 0)
@@ -2897,13 +3034,13 @@ add_scenario_facets <- function(df,
     settings <- distinct(tibble(prob_test_daily = sent, test_sens = sens)) |>
       arrange(prob_test_daily, test_sens)
   }
-  setting_levels <- example_setting_label(settings$prob_test_daily, settings$test_sens)
+  setting_levels <- example_setting_label(settings$prob_test_daily, settings$test_sens, short)
   policy <- names(isolation_policy_codes)[match(code, sub("_.*", "", isolation_policy_codes))]
   df |>
     mutate(
       policy      = factor(isolation_policy_labels[policy], levels = isolation_policy_labels[isolation_policy_levels]),
       policy_code = factor(code, levels = sub("_.*", "", isolation_policy_codes[isolation_policy_levels])),
-      setting     = factor(example_setting_label(sent, sens), levels = setting_levels)
+      setting     = factor(example_setting_label(sent, sens, short), levels = setting_levels)
     )
 }
 
@@ -2917,7 +3054,7 @@ example_facets <- facet_grid(setting ~ policy, labeller = labeller(policy = labe
 # `colours` an optional vector of fill colours in the same order.
 plot_example_stacked <- function(df, components, title, y_label, colours = NULL, caption = NULL) {
   p <- df |>
-    add_scenario_facets() |>
+    add_scenario_facets(short = TRUE) |>
     select(policy_code, setting, all_of(unname(components))) |>
     pivot_longer(-c(policy_code, setting), names_to = "component", values_to = "value") |>
     mutate(component = factor(names(components)[match(component, components)],
@@ -2932,6 +3069,7 @@ plot_example_stacked <- function(df, components, title, y_label, colours = NULL,
           plot.caption = element_text(size = font_base_size, hjust = 0), plot.caption.position = "plot") +
     labs(title = title, x = NULL, y = y_label, fill = NULL,
          caption = stringr::str_wrap(paste(c("P1: no isolation; P2: confirmed cases isolated; P3: suspected and confirmed cases isolated.",
+                                             "Testing: daily probability of an untested CDI case being sent for testing; Sens.: test sensitivity.",
                                              caption), collapse = " "), 150))
   if (is.null(colours)) {
     p + scale_fill_viridis_d(end = 0.85, breaks = names(components))

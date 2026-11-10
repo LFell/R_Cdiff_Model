@@ -339,12 +339,14 @@ Defines:
   test type, and CDI-attributable deaths,
 - `add_derived_outcomes()`: proportions sent for testing, ever tested
   (point prevalence, Outcome A4), confirmed, missed and confirmed via retest,
-  admission and discharge prevalence and their differences, and
-  specimens tested per confirmed case,
+  admission and discharge prevalence and their differences,
+  specimens tested per confirmed case, average length of stay, side-room
+  share of bed-days, and the rates per 10,000 patient bed-days of
+  Outcomes E1–E3,
 - `make_research_outcomes_table()`: derives and formats the research
-  question outcomes (Outcome A1–Outcome D6) and ICER inputs into a single wide table,
-- `make_final_outcomes_vs_base()`: absolute differences vs a chosen base
-  scenario,
+  question outcomes (Outcome A1–Outcome E3) and ICER inputs into a single wide table,
+- `make_grid_rates()`, `rate_spec`: the rates, side-room share, proportion
+  missed and missed cases by origin saved in `grid_rates.csv`,
 - `mean_wait_to_state(parms, target)`: mean time from CDI symptom onset
   (entry to I) to first test (`"Xtest"`) or to treatment (`"Xtreat"`),
   among the cases that get there, calculated exactly from the scenario's
@@ -362,17 +364,24 @@ Defines:
   `make_plot_long_flows()`: reshape outputs to long format for plotting,
 - `model_colour_palette`, `model_pretty_labels`: named colour and label
   vectors used consistently across plots,
-- plot functions: `plot_states_line()`, `plot_states_line_noS()`,
-  `plot_states_area()`, `plot_states_area_noS()`,
-  `plot_bed_occupancy()`, `plot_cumulative_bed_occupancy()`,
+- time-series plot functions (QMD Section 10): `plot_states_line()`,
+  `plot_states_line_noS()`, `plot_states_area()`,
+  `plot_states_area_noS()`, `plot_bed_occupancy()`,
   `plot_flows_to_C_and_I()`, `plot_case_ascertainment_line()`,
-  `plot_case_ascertainment_bar()`, `plot_testing_bar()`,
-  `plot_case_confirmation_bar()`, `plot_missed_cases_bar()`,
-  `plot_deaths_by_state_bar()`, `plot_deaths_by_state_area_noS()`,
-  `plot_discharges_by_state_bar()`,
-  `plot_discharges_by_state_area_noS()`, `plot_case_outcomes_bar()`,
-  `plot_cdi_cases_by_origin_bar()`, `plot_bed_days_bar()`,
-  `plot_scenario_params()`. All plots use one text size,
+  `plot_deaths_by_state_area_noS()`,
+  `plot_discharges_by_state_area_noS()`,
+- stacked bar plot functions (QMD Section 14, via
+  `plot_example_stacked()` and `add_scenario_facets()`):
+  `plot_cdi_cases_by_origin_bar()`, `plot_colonisation_sources_bar()`,
+  `plot_testing_bar()`, `plot_case_confirmation_bar()`,
+  `plot_missed_cases_bar()`, `plot_case_outcomes_bar()`,
+  `plot_bed_days_bar()`, `plot_cdi_patient_days_bar()` (state bars with
+  a thin location bar beside each; two legends combined with `cowplot`),
+- grid plot functions (QMD Sections 12, 15 and 17):
+  `plot_grid_outcome_lines()`, `plot_grid_diff_lines()`,
+  `plot_grid_outcome_heatmap()`, `plot_grid_diff_heatmap()`,
+  `plot_grid_heatmaps_with_diffs()`, `plot_actual_vs_observed()`,
+  `plot_sensitivity_levels()`, `plot_elasticities()`. All plots use one text size,
   `font_base_size` (9 pt, via `my_theme` and `grid_theme`); the QMD saves
   every plot 24 cm wide and shows it at the page width, so text appears
   the same size in every section.
@@ -433,7 +442,7 @@ an expected direction (`"increases"`, `"decreases"`, `"unchanged"` or
 ambiguous directions, flagged for manual inspection rather than
 auto-assessed. `oat_specs` gives the expectations for
 `"suspected_and_confirmed"`, and `oat_specs_policy` overrides them where
-they differ by policy. The % change in each Section 14 outcome
+they differ by policy. The % change in each Section 12 outcome
 (`grid_outcome_spec`) is also reported, without expected directions.
 
 **Files produced** (in `Outputs/Model4/OAT/<run_label>/`):
@@ -453,25 +462,26 @@ Main Quarto document. Runs the end-to-end workflow:
   time series for a few example scenarios,
 - negative-value and stabilisation checks for every scenario (Sections 8
   and 9),
-- results for the example scenarios that help verify the model is
-  working as expected (Sections 10–12):
-  - time-series line and area plots, up to stabilisation (Section 10),
-  - annual summary tables, including hospital-acquired CDI cases
-    (Section 11),
-  - stacked bar plots of annual summaries, including incident CDI cases
-    by origin (Section 12),
-- results for the write-up (Sections 13–17):
-  - table of research question outcomes: the research outcomes table (annual
-    totals, including rates per 10,000 patient bed-days) for every
-    scenario, and differences between policies (P2 vs P1, P3 vs P1, P3
-    vs P2; Section 13),
-  - a table of testing outputs for each daily probability of testing
+- time-series line and area plots of the example scenarios, up to
+  stabilisation, to help verify the model is working as expected
+  (Section 10),
+- annual research question outcomes for every scenario, calculated once
+  (Section 11): counts and patient-days per year of the analysis period
+  after the burn-in, proportions, length of stay and mean times, the
+  long-format outcomes and policy differences used by every later
+  section, the CSVs (including rates per 10,000 patient bed-days), and a
+  check against year-by-year sums for the example scenarios,
+- results for the write-up (Sections 12–18):
+  - outcomes by daily probability of testing and test sensitivity: plots
+    comparing the isolation policies across the grid (Section 12),
+  - table of research question outcomes for the example scenarios, and
+    a table of testing outputs for each daily probability of testing
     (`prob_test_daily`): the mean time to testing if not discharged or
     dead first (days), the actual mean time to testing among cases
     tested (days), and the shares of incident and prevalent (Outcome A4, by
     policy) CDI cases ever tested (Section 13, repeated in Section 15),
-  - outcomes by daily probability of testing and test sensitivity: plots
-    comparing the isolation policies across the grid (Section 14),
+  - stacked bar plots of selected annual outcomes for the example
+    scenarios, including incident CDI cases by origin (Section 14),
   - change in outcomes due to increasing test sensitivity, e.g. from 50%
     to 80% (Section 15),
   - commentary on the effect of improving test sensitivity, by research
@@ -479,8 +489,9 @@ Main Quarto document. Runs the end-to-end workflow:
     from the grid (Section 16),
   - responsiveness of outcomes to improving test sensitivity: a
     forest-style chart of the arc elasticity of every outcome by policy,
-    at daily probabilities of testing of 0.03 and 0.40, and commentary
-    grouping outcomes by how strongly they respond (Section 17),
+    at daily probabilities of testing of 0.03 and 0.40 (Section 17),
+  - commentary grouping outcomes by how strongly they respond to
+    improving test sensitivity (Section 18),
 - CSV and PNG export to `Outputs/Model4/<run_label>/`.
 
 Accepts a `run_label` parameter (see **Run instructions** below).
@@ -571,17 +582,21 @@ produce a labelled output folder.
 ## Model settings
 
 - **Model run time**, **time step** and **burn-in** are set at the top
-  of **Section 5** in the QMD. The default is a 6-year run (`365 * 6`
+  of **Section 5** in the QMD. The default is a 2-year run (`365 * 2`
   days) at a half-day time step (`time_step = 0.5`), with a 1-year
-  burn-in (`burn_in = 365`), giving a 5-year analysis period.
+  burn-in (`burn_in = 365`), giving a 1-year analysis period. Every
+  scenario has stabilised before the end of the burn-in, so every year
+  after it is the same and one year is enough; a longer run gives the
+  same annual values.
 - The burn-in is the period while the model moves from its initial
   conditions to steady state. It is the same for every scenario and is
   excluded from all cumulative totals, patient-days and annual
   summaries, so these cover the analysis period only. `add_quantities()`
   gives rows in the burn-in (including time 0) zero width and multiplies
-  every other output row by the time step. Sections 12–15 of the QMD
-  report annual totals (the analysis-period total divided by its length
-  in years), for comparison with surveillance data.
+  every other output row by the time step. Section 11 of the QMD
+  calculates annual totals for every scenario (the analysis-period total
+  divided by its length in years), for comparison with surveillance
+  data, and Sections 12–18 use them.
 - All model time intervals (e.g. `t_test_turnaround`, length-of-stay)
   and transition rates use the same day-based timescale.
 - Annual summaries use 365-day intervals counted from the end of the
@@ -642,7 +657,7 @@ are:
   - the share of prevalent CDI cases ever tested at model stabilisation
     (Outcome A4), by policy.
 
-  The grid values are unevenly spaced, so the Section 14 plots show them
+  The grid values are unevenly spaced, so the Section 12 plots show them
   as a categorical axis or legend. Mawer et al. (2019, doi
   10.1016/j.jhin.2019.05.001) found 75 of 230 hospital-onset diarrhoea
   patients in hospital (33%) had ever been tested for CDI. That is
@@ -665,15 +680,15 @@ Scenario labels combine a policy code with the daily probability of
 testing and the sensitivity in hundredths (whole percentages), e.g.
 `P2_confirmed_test007_sens100` (`P1_none`, `P2_confirmed`,
 `P3_susp_conf`; `test000` is no testing). `example_settings` in Section
-3 lists the settings for the example scenarios, in the order shown in
-Sections 10 and 12 (by default 0.03 and 0.40, about 33 and 2 days' mean time
+4 lists the settings for the example scenarios, in the order shown in
+Sections 10, 13 and 14 (by default 0.03 and 0.40, about 33 and 2 days' mean time
 to testing if not discharged or dead first, each at 50% and 100%
 sensitivity), each run under all three policies (12
 scenarios). They are used for time-series plots, annual summaries and
 the outcome tables.
 
 In Section 10, the time-series line and area plots show the policies as
-columns and the settings as rows; in Section 12, the stacked bar plots
+columns and the settings as rows; in Section 14, the stacked bar plots
 group the bars by setting, with P1, P2 and P3 side by side and the
 setting label beneath each group.
 
@@ -703,7 +718,7 @@ on 15 cores). Set `grid_n_cores <- 1` to run scenarios one at a time.
   `"confirmed"`; and `Xtest`, `Xtreat`, `T4` and `T5` under
   `"suspected_and_confirmed"`.
 
-Section 14 of the QMD (outcomes by daily probability of testing and test
+Section 12 of the QMD (outcomes by daily probability of testing and test
 sensitivity) compares the three isolation policies across the daily
 probability of testing and test sensitivity. The outcomes are the research question outcomes defined in
 `grid_outcome_spec` in `Scripts/Model4_Functions.R` (numbered as in the
@@ -740,13 +755,28 @@ research questions below):
 | Outcome D4: CDI-attributable deaths in hospital | `cum_deaths_CDI_attributable` | count per year | avoided |
 | Outcome D5: Mean time from CDI symptom onset to first test, among cases tested | `mean_wait_test` | days | avoided |
 | Outcome D6: Mean time from CDI symptom onset to treatment, among cases treated | `mean_wait_treatment` | days | avoided |
+| Outcome E1: Actual CDI incidence per 10,000 patient bed-days | `rate_cdi_actual` | per 10,000 bed-days | avoided |
+| Outcome E1: Observed (detected) CDI incidence per 10,000 patient bed-days | `rate_cdi_observed` | per 10,000 bed-days | additional |
+| Outcome E2: Actual hospital-onset CDI incidence per 10,000 patient bed-days | `rate_ho_actual` | per 10,000 bed-days | avoided |
+| Outcome E2: Observed (detected) hospital-onset CDI incidence per 10,000 patient bed-days (estimated) | `rate_ho_observed` | per 10,000 bed-days | additional |
+| Outcome E3: Faecal specimens tested per 10,000 patient bed-days | `rate_tests` | per 10,000 bed-days | avoided |
+
+Section E outcomes are for comparison with surveillance data: observed
+rates count confirmed cases only, and observed hospital-onset CDI is
+estimated as confirmed cases × the hospital-onset share of incident CDI
+cases (every case follows the same rates from I, whatever its origin).
+Section 12 also shows a chart of actual and observed incidence (E1, E2)
+together against the daily probability of testing at 50%, 80% and 100%
+sensitivity (`plot_actual_vs_observed()`,
+`grid_actual_vs_observed_incidence.png`).
 
 Not plotted: colonisation and CDI prevalence at admission (Outcome B3; fixed
 inputs, the same in every scenario) and confirmed cases started on
 treatment (Outcome C7; equal to Outcome A5). Counts are annual totals over the analysis
-period; proportions, prevalence differences, length of stay, specimens
-per confirmed case and mean times are over the whole analysis period
-(derived in `add_derived_outcomes()`). Differences
+period after the burn-in (QMD Section 11); proportions, prevalence
+differences, length of stay and specimens per confirmed case are
+derived from them (`add_derived_outcomes()`), and mean times are exact
+steady-state values (`mean_wait_to_state()`). Differences
 in total CDI cases (Outcome A1) are driven entirely by differences in
 hospital-acquired CDI cases (Outcome B2), so their difference plots are
 identical: with fixed admissions, patients admitted with CDI and
@@ -766,7 +796,10 @@ hospital-acquired colonisation. Each outcome has its own tab with:
   with a shared y axis;
 - the same plot for the differences from P1 (P2 vs P1, P3 vs P1) at the
   same daily probability of testing and sensitivity, placed under P2 and
-  P3 (the space under P1 is left empty);
+  P3 (the space under P1 is left empty); the y axis spans at least ±2%
+  of the outcome's largest value across the grid (`diff_axis_min_share`,
+  `diff_axis_floor()`), so small differences are not stretched to fill
+  the panel, and labels use as many decimal places as the breaks need;
 - heatmaps of test sensitivity (x) by daily probability of testing (y,
   one evenly spaced row per grid value, no testing at the bottom and the
   most testing at the top; tiles with no
@@ -774,8 +807,10 @@ hospital-acquired colonisation. Each outcome has its own tab with:
   value, in one figure: the outcome under
   each policy on the top row (shared colour scale, yellow lowest, purple
   highest), and the differences from P1 (P2 vs P1, P3 vs P1) on the
-  bottom row under P2 and P3, with the space under P1 left empty (yellow
-  largest negative difference, purple largest positive difference).
+  bottom row under P2 and P3, with the space under P1 left empty
+  (diverging scale centred on no difference: white = 0, orange lower
+  than P1, purple higher; symmetric, spanning at least the same ±2%
+  floor as the line plots).
 
 The incremental effect of also isolating suspected cases (P3 vs P2) is
 saved in `grid_key_outcome_differences.csv`. Each panel has its own y
@@ -791,7 +826,7 @@ infectious in hospital for longer. This is intended, to show the effect
 of a low-sensitivity assay.
 
 Section 15 of the QMD (change in outcomes due to increasing test
-sensitivity) shows, for every outcome in Section 14 (`gain = TRUE` in
+sensitivity) shows, for every outcome in Section 12 (`gain = TRUE` in
 `grid_outcome_spec`), the change from increasing test sensitivity from
 `sens_from` (default 50%) to `sens_to` (default 80%), by isolation
 policy (P1, P2 and P3 reported separately) and daily probability of
@@ -819,13 +854,14 @@ one panel per daily probability of testing in `gain_table_sent`, a
 point per policy (`policy_colours`), reference lines at 0 and ±1
 (response in proportion to sensitivity) and solid lines between the
 outcome groups A–D. Outcomes with no elasticity (the Outcome B3 differences in
-prevalence) are left out.
+prevalence) are left out. Section 18 gives the commentary, grouping
+outcomes by how strongly they respond.
 
 Counts are per year; proportions and rates are over the analysis period.
 Each outcome has a tab with a table of the values at `sens_from` and
 `sens_to`, the change and the arc elasticity, by policy (rows ordered
 by policy, then daily probability of testing of 0.03 and 0.40;
-`gain_table_sent`, set in Section 14) and a chart,
+`gain_table_sent`, set in Section 12) and a chart,
 `plot_sensitivity_levels()`, of the outcome itself over every daily
 probability of testing in the grid: `sens_from` dashed and `sens_to`
 solid, one panel per policy with a fixed y axis, the gap between them
@@ -834,7 +870,7 @@ shaded and a dotted line for no testing. The x axis is
 increases left to right; no testing is the dotted horizontal line). The
 testing outputs (shares of incident and prevalent cases ever tested,
 mean times to first test and to treatment) are outputs, so they are
-plotted as outcomes in their own Section 14 tabs rather than added to
+plotted as outcomes in their own Section 12 tabs rather than added to
 this axis; the section also repeats the Section 13 table of testing
 outputs. `sens_from` and `sens_to` must both be values
 in the grid.
@@ -912,7 +948,7 @@ b)  hospital-acquired CDI is estimated by apportioning the flow from C
 ### Outcomes of interest
 
 Each outcome is evaluated across the full range of the control
-variables (plots in QMD Section 14), and compared for an improvement in
+variables (plots in QMD Section 12), and compared for an improvement in
 test sensitivity from 50% to 80% for P1, P2 and P3 (plots across the
 daily probability of testing, and tables at 0.03 and 0.40, in Section 15).
 
@@ -970,6 +1006,17 @@ daily probability of testing, and tables at 0.03 and 0.40, in Section 15).
   cases tested;
 - Outcome D6: the mean time from CDI symptom onset to the start of treatment,
   among the cases treated.
+
+**E) Comparison with surveillance data:**
+
+- Outcome E1: actual and observed (detected) CDI incidence per 10,000
+  patient bed-days;
+- Outcome E2: actual and observed (detected) hospital-onset CDI incidence
+  per 10,000 patient bed-days (observed estimated from confirmed cases ×
+  the hospital-onset share of incident cases; surveillance classifies
+  cases by specimen date relative to admission, so the definitions
+  differ);
+- Outcome E3: faecal specimens tested per 10,000 patient bed-days.
 
 ### Cost effectiveness analysis
 
@@ -1049,6 +1096,11 @@ scenario. The QMD displays it for the example scenarios
 | Outcome D4: CDI-attributable deaths in hospital^iv^ | `cum_deaths_CDI_attributable` |
 | Outcome D5: Mean time from CDI symptom onset to first test, among cases tested (days) | `mean_wait_test` (entry to I to first entry to Xtest; `mean_wait_to_state()`) |
 | Outcome D6: Mean time from CDI symptom onset to treatment, among cases treated (days) | `mean_wait_treatment` (entry to I to entry to Xtreat, including false negatives and retests) |
+| Outcome E1: Actual CDI incidence (per 10,000 patient bed-days) | `rate_cdi_actual` = 10,000 × `cum_total_infected_incidence` / `hospital_bed_days` |
+| Outcome E1: Observed (detected) CDI incidence (per 10,000 patient bed-days) | `rate_cdi_observed` = 10,000 × `cum_confirmed_cases` / `hospital_bed_days` |
+| Outcome E2: Actual hospital-onset CDI incidence (per 10,000 patient bed-days) | `rate_ho_actual` = 10,000 × `cum_infected_in_hospital` / `hospital_bed_days` |
+| Outcome E2: Observed (detected) hospital-onset CDI incidence, estimated (per 10,000 patient bed-days) | `rate_ho_observed` = `rate_cdi_observed` × `cum_infected_in_hospital` / `cum_total_infected_incidence` |
+| Outcome E3: Faecal specimens tested (per 10,000 patient bed-days) | `rate_tests` = 10,000 × `cum_total_test` / `hospital_bed_days` |
 
 ICER numerator (costs): general ward patient bed-days, side-room patient
 bed-days, confirmed CDI cases (treatment courses), faecal specimens
@@ -1118,7 +1170,7 @@ All scenarios in the grid:
 - `final_outcomes_all.csv` (control values, cumulative outcomes,
   patient-days and derived proportions, one row per scenario)
 - `grid_key_outcomes.csv` and `grid_key_outcome_differences.csv` (the
-  Section 14 and 15 outcomes, counts per year, and their differences
+  Section 12 and 15 outcomes, counts per year, and their differences
   between policies including P3 vs P2, in long format)
 - `grid_rates.csv` (rates per 10,000 patient bed-days, side-room and
   missed proportions and missed cases per year by origin, long format)
@@ -1130,7 +1182,7 @@ All scenarios in the grid:
   one test sensitivity)
 - `grid_lines_<outcome>.png`, `grid_lines_diff_<outcome>.png` and
   `grid_heatmap_<outcome>.png` (heatmaps and difference heatmaps in one
-  figure; one set per Section 14 outcome)
+  figure; one set per Section 12 outcome)
 - `sensitivity_gain_<from>_to_<to>.csv` and
   `sensitivity_levels_<from>_and_<to>_<outcome>.png` (values at both
   sensitivities) (Section 15, e.g. `sensitivity_gain_050_to_080.csv`)
@@ -1150,7 +1202,7 @@ Example scenarios only:
   `plot_case_ascertainment_line.png`,
   `plot_deaths_by_state_area_noS.png`,
   `plot_discharges_by_state_area_noS.png`
-- stacked bar plots of annual totals (Section 12):
+- stacked bar plots of annual totals (Section 14):
   `plot_colonisations_by_source.png` (background acquisition and
   patient-to-patient transmission from C, I, Xtest, FN and Xtreat),
   `plot_testing_bar.png` (first tests and retests),
@@ -1158,8 +1210,14 @@ Example scenarios only:
   retest), `plot_missed_cases_bar.png` (untested and false negatives)
   and `plot_case_outcomes_bar.png` (discharged untreated: untested from
   I and false negatives from FN; recovered after treatment; died
-  following CDI) and `plot_bed_days_bar.png` (patient bed-days per year
-  in general ward beds and in side rooms)
+  following CDI), `plot_bed_days_bar.png` (patient bed-days per year
+  in general ward beds and in side rooms) and
+  `plot_cdi_patient_days_bar.png` (CDI patient-days per year by state —
+  I, Xtest, FN, Xtreat, T1, T3, T4 — and location: general ward lighter
+  shade, side room full colour; `plot_cdi_patient_days_bar()`)
+- `grid_actual_vs_observed_incidence.png` (Section 12: actual and
+  observed CDI and hospital-onset CDI incidence per 10,000 patient
+  bed-days, Outcome E1 and Outcome E2)
 
 The rendered HTML (`<run_label>_Model4_Run.html`) embeds these plots, so
 it can be moved or shared without the `Outputs/` folder.

@@ -61,7 +61,7 @@ model_flows <- tibble::tribble(
   "Xtreat",     "Exit",       "1",                      NA,            "treat",     "1 / t_treatment",        "1 - prop_Xtreat_to_S",          "1 - prop_Xtreat_to_S (Discharged)",          "exit_dis",
   "T2",         "S",          "1",                      "tau",         NA,          NA,                       NA,                              "tau (Patient transfer)",                     "move",
   "T5",         "S",          "1",                      "tau",         NA,          NA,                       NA,                              "tau (Patient transfer)",                     "move",
-  # Discharges (not a model state) and deaths (to D)  
+  # Discharges (not a model state) and deaths (to D)
   "S",          "Exit",       "1",                      "disS",        NA,          NA,                       NA,                              "disS",                                       "exit_dis",
   "C",          "Exit",       "1",                      "disC",        NA,          NA,                       NA,                              "disC",                                       "exit_dis",
   "I",          "Exit",       "1",                      "disI",        NA,          NA,                       NA,                              "disI",                                       "exit_dis",
