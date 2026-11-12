@@ -54,9 +54,10 @@ been ported to Model 4 (`Model4_OAT_Test.qmd`).
 
 ![](Images/261102%20P1%20P2%20P3%20combined.PNG)
 
-This is the earlier hand-drawn diagram. The report now draws a flow diagram for each isolation policy
-from the model code when it renders (Section 1a; `Scripts/Model4_Diagrams.R`), saved as
-`flow_P1.png` to `flow_P3.png` in `Outputs/Model4/<run_label>/`.
+This is the earlier hand-drawn diagram. The report now draws a flow
+diagram for each isolation policy from the model code when it renders
+(Section 1a; `Scripts/Model4_Diagrams.R`), saved as `flow_P1.png` to
+`flow_P3.png` in `Outputs/Model4/<run_label>/`.
 
 ### State variables
 
@@ -205,10 +206,10 @@ Default parameter values are given in brackets; they are set in
   to C or S): patients with CDI leave the infected states only by
   treatment, discharge or death. Treatment duration and effectiveness
   are the same under every policy, so transfer delays under P2 (before
-  treatment, T1) and P3 (before testing, T3, and after a false
-  negative, T4) lengthen the duration of infection. The model does not
-  capture any effect of these delays on severity or mortality, but
-  quantifies them (Outcomes D5 and D6).
+  treatment, T1) and P3 (before testing, T3, and after a false negative,
+  T4) lengthen the duration of infection. The model does not capture any
+  effect of these delays on severity or mortality, but quantifies them
+  (Outcomes D5 and D6).
 - Colonised patients are not screened, detected or decolonised.
 
 **Case identification and testing**
@@ -223,8 +224,7 @@ Default parameter values are given in brackets; they are set in
   `-log(1 - prob_test_daily)`. Identification competes with discharge
   and death, so the share of cases ever tested and the actual mean time
   to testing among cases tested both follow from it (see
-  `prob_test_daily` under
-  **Scenario definitions**).
+  `prob_test_daily` under **Scenario definitions**).
 - The specimen is collected on entry to Xtest and treatment starts on
   entry to Xtreat, so patients waiting for transfer are not yet tested
   (T3, P3) or treated (T1, P2), and transfer time adds to the time to
@@ -338,21 +338,23 @@ Defines:
   post-hoc attribution of hospital-acquired CDI and confirmed cases by
   test type, and CDI-attributable deaths,
 - `add_derived_outcomes()`: proportions sent for testing, ever tested
-  (point prevalence, Outcome A4), confirmed, missed and confirmed via retest,
-  admission and discharge prevalence and their differences,
+  (point prevalence, Outcome A4), confirmed, missed and confirmed via
+  retest, admission and discharge prevalence and their differences,
   specimens tested per confirmed case, average length of stay, side-room
   share of bed-days, and the rates per 10,000 patient bed-days of
   Outcomes E1–E3,
 - `make_research_outcomes_table()`: derives and formats the research
-  question outcomes (Outcome A1–Outcome E3) and ICER inputs into a single wide table,
-- `make_grid_rates()`, `rate_spec`: the rates, side-room share, proportion
-  missed and missed cases by origin saved in `grid_rates.csv`,
+  question outcomes (Outcome A1–Outcome E3) and ICER inputs into a
+  single wide table,
+- `make_grid_rates()`, `rate_spec`: the rates, side-room share,
+  proportion missed and missed cases by origin saved in
+  `grid_rates.csv`,
 - `mean_wait_to_state(parms, target)`: mean time from CDI symptom onset
   (entry to I) to first test (`"Xtest"`) or to treatment (`"Xtreat"`),
   among the cases that get there, calculated exactly from the scenario's
   rates (the CDI pathway is a continuous-time Markov chain; includes
-  transfer waits, test turnaround, false negatives and retests); added to
-  the grid's final outcomes as `mean_wait_test` and
+  transfer waits, test turnaround, false negatives and retests); added
+  to the grid's final outcomes as `mean_wait_test` and
   `mean_wait_treatment` (Outcomes D5, D6),
 - `wait_if_not_discharged()`, `mean_wait_to_testing()`,
   `make_testing_outputs()`, `format_testing_outputs()`: testing outputs
@@ -381,35 +383,43 @@ Defines:
   `plot_grid_outcome_lines()`, `plot_grid_diff_lines()`,
   `plot_grid_outcome_heatmap()`, `plot_grid_diff_heatmap()`,
   `plot_grid_heatmaps_with_diffs()`, `plot_actual_vs_observed()`,
-  `plot_sensitivity_levels()`, `plot_elasticities()`. All plots use one text size,
-  `font_base_size` (9 pt, via `my_theme` and `grid_theme`); the QMD saves
-  every plot 24 cm wide and shows it at the page width, so text appears
-  the same size in every section.
+  `plot_sensitivity_levels()`, `plot_elasticities()`. All plots use one
+  text size, `font_base_size` (9 pt, via `my_theme` and `grid_theme`);
+  the QMD saves every plot 24 cm wide and shows it at the page width, so
+  text appears the same size in every section.
 
 ### `Scripts/Model4_Diagrams.R`
 
-Draws the flow diagram for each isolation policy (Graphviz, via `DiagrammeR`), sourced in Section 1a
-of `Model4_Run.qmd`. Defines:
+Draws the flow diagram for each isolation policy (Graphviz, via
+`DiagrammeR`), sourced in Section 1a of `Model4_Run.qmd`. Defines:
 
-- `model_flows`: one row per flow in `model_ode()` (from, to, the routing flag that turns it on for
-  a policy, its rate, or for a forked arrow the shared exit rate and the branch proportion, its label
-  and its type: move, discharge or death); `model_states`: state labels, whether infectious, and
-  location (general ward, side room or set by the policy),
-- `scenario_flows()`: the flows used under a scenario, with their rates evaluated,
-- `check_model_flows(parms)`: checks that the flow table gives the same derivative for every state
-  as `model_ode()`, for a random state; stops if not, so the diagram cannot drift from the model,
-- `diagram_pos`, `fixed_edge_labels`: fixed positions (inches) of the states, discharge/death nodes,
-  junction dots, the formula key and the two labels between S and C, in three rows,
-- `formula_key()`: the key box, with the formula for each rate on the diagram from the input
-  parameters (lambda written out with the terms of the states the policy uses),
-- `build_flow_dot(parms)`, `plot_flow_diagram(parms)`, `save_flow_diagram(parms, path)`: the
-  Graphviz text, the diagram, and a PNG (2600 px wide). Only the policy in `parms` affects the
-  diagram.
+- `model_flows`: one row per flow in `model_ode()` (from, to, the
+  routing flag that turns it on for a policy, its rate, or for a forked
+  arrow the shared exit rate and the branch proportion, its label and
+  its type: move, discharge or death); `model_states`: state labels,
+  whether infectious, and location (general ward, side room or set by
+  the policy),
+- `scenario_flows()`: the flows used under a scenario, with their rates
+  evaluated,
+- `check_model_flows(parms)`: checks that the flow table gives the same
+  derivative for every state as `model_ode()`, for a random state; stops
+  if not, so the diagram cannot drift from the model,
+- `diagram_pos`, `fixed_edge_labels`: fixed positions (inches) of the
+  states, discharge/death nodes, junction dots, the formula key and the
+  two labels between S and C, in three rows,
+- `formula_key()`: the key box, with the formula for each rate on the
+  diagram from the input parameters (lambda written out with the terms
+  of the states the policy uses),
+- `build_flow_dot(parms)`, `plot_flow_diagram(parms)`,
+  `save_flow_diagram(parms, path)`: the Graphviz text, the diagram, and
+  a PNG (2600 px wide). Only the policy in `parms` affects the diagram.
 
-Forked arrows (one exit rate, split by proportions) are used for admissions (`adm_rate` split by
-`prop_adm_C`, `prop_adm_I`), test results (`t_test_turnaround`, split by `test_sens`) and the end of
-treatment (`t_treatment`, split by `prop_Xtreat_to_S`). When `model_ode()` changes, update
-`model_flows` (and `diagram_pos` for any new state).
+Forked arrows (one exit rate, split by proportions) are used for
+admissions (`adm_rate` split by `prop_adm_C`, `prop_adm_I`), test
+results (`t_test_turnaround`, split by `test_sens`) and the end of
+treatment (`t_treatment`, split by `prop_Xtreat_to_S`). When
+`model_ode()` changes, update `model_flows` (and `diagram_pos` for any
+new state).
 
 ### `Model4_OAT_Test.qmd`
 
@@ -425,8 +435,8 @@ introduction of the report lists what changed.
 **What it tests:** each of the 26 fixed parameters in
 `Scripts/Model4_Parameters.R` (the render stops if any fixed parameter
 has no specification) is run at a low and a high value, at a daily
-probability of testing of 0.07 (`prob_test_daily`; about 50% of CDI cases sent
-for testing) and 50% test sensitivity (so the untested,
+probability of testing of 0.07 (`prob_test_daily`; about 50% of CDI
+cases sent for testing) and 50% test sensitivity (so the untested,
 false-negative and retesting pathways are all active), under each of the
 three isolation policies.
 
@@ -474,12 +484,13 @@ Main Quarto document. Runs the end-to-end workflow:
 - results for the write-up (Sections 12–18):
   - outcomes by daily probability of testing and test sensitivity: plots
     comparing the isolation policies across the grid (Section 12),
-  - table of research question outcomes for the example scenarios, and
-    a table of testing outputs for each daily probability of testing
+  - table of research question outcomes for the example scenarios, and a
+    table of testing outputs for each daily probability of testing
     (`prob_test_daily`): the mean time to testing if not discharged or
     dead first (days), the actual mean time to testing among cases
-    tested (days), and the shares of incident and prevalent (Outcome A4, by
-    policy) CDI cases ever tested (Section 13, repeated in Section 15),
+    tested (days), and the shares of incident and prevalent (Outcome A4,
+    by policy) CDI cases ever tested (Section 13, repeated in Section
+    15),
   - stacked bar plots of selected annual outcomes for the example
     scenarios, including incident CDI cases by origin (Section 14),
   - change in outcomes due to increasing test sensitivity, e.g. from 50%
@@ -620,9 +631,8 @@ Scenario control values are set as vectors in **Section 4** of
 `Model4_Run.qmd`, and every combination is run (the scenario grid; by
 default 3 policies × 12 values of the daily probability of testing (0,
 1, 2, 3, 4, 5, 7, 10, 15, 20, 30 and 40%) × 11 sensitivity values = 396
-scenarios, about 4 minutes on one core, about 30 seconds in
-parallel). The three control variables
-are:
+scenarios, about 4 minutes on one core, about 30 seconds in parallel).
+The three control variables are:
 
 - `isolation_policy`: which patients are isolated in a side room,
   numbered from least to most isolation (set by
@@ -642,11 +652,13 @@ are:
 
 - `prob_test_daily`: daily probability that an untested CDI case (in I)
   is sent for testing (0 to below 1, 0 = no testing; multiples of 0.01,
-  as scenario labels show it in hundredths); shown as a decimal (e.g. 0.03,
-  `fmt_prob()`), not a percentage, so it is not confused with shares. It sets the case identification rate
+  as scenario labels show it in hundredths); shown as a decimal (e.g.
+  0.03, `fmt_prob()`), not a percentage, so it is not confused with
+  shares. It sets the case identification rate
   `gamma = prob2rate(prob_test_daily, 1) = -log(1 - prob_test_daily)`.
   Identification competes with discharge and death from I, so these are
   outputs (table in Sections 13 and 15, `testing_outputs.csv`):
+
   - the mean time to testing if not discharged or dead first,
     `1 / gamma` (about 2 days at 40%, 14 days at 7% and 100 days at 1%);
   - the actual mean time to testing among the cases tested,
@@ -661,10 +673,10 @@ are:
   as a categorical axis or legend. Mawer et al. (2019, doi
   10.1016/j.jhin.2019.05.001) found 75 of 230 hospital-onset diarrhoea
   patients in hospital (33%) had ever been tested for CDI. That is
-  comparable in kind with Outcome A4, but its denominator is all diarrhoea, not
-  CDI, so it is not used to calibrate `prob_test_daily`. Plots and
-  tables label it "Daily probability of an untested CDI case being sent
-  for testing".
+  comparable in kind with Outcome A4, but its denominator is all
+  diarrhoea, not CDI, so it is not used to calibrate `prob_test_daily`.
+  Plots and tables label it "Daily probability of an untested CDI case
+  being sent for testing".
 
 - `test_sens`: diagnostic test sensitivity (0--1). The model uses it to
   calculate the confirmed case rate
@@ -681,11 +693,11 @@ testing and the sensitivity in hundredths (whole percentages), e.g.
 `P2_confirmed_test007_sens100` (`P1_none`, `P2_confirmed`,
 `P3_susp_conf`; `test000` is no testing). `example_settings` in Section
 4 lists the settings for the example scenarios, in the order shown in
-Sections 10, 13 and 14 (by default 0.03 and 0.40, about 33 and 2 days' mean time
-to testing if not discharged or dead first, each at 50% and 100%
-sensitivity), each run under all three policies (12
-scenarios). They are used for time-series plots, annual summaries and
-the outcome tables.
+Sections 10, 13 and 14 (by default 0.03 and 0.40, about 33 and 2 days'
+mean time to testing if not discharged or dead first, each at 50% and
+100% sensitivity), each run under all three policies (12 scenarios).
+They are used for time-series plots, annual summaries and the outcome
+tables.
 
 In Section 10, the time-series line and area plots show the policies as
 columns and the settings as rows; in Section 14, the stacked bar plots
@@ -720,46 +732,47 @@ on 15 cores). Set `grid_n_cores <- 1` to run scenarios one at a time.
 
 Section 12 of the QMD (outcomes by daily probability of testing and test
 sensitivity) compares the three isolation policies across the daily
-probability of testing and test sensitivity. The outcomes are the research question outcomes defined in
-`grid_outcome_spec` in `Scripts/Model4_Functions.R` (numbered as in the
-research questions below):
+probability of testing and test sensitivity. The outcomes are the
+research question outcomes defined in `grid_outcome_spec` in
+`Scripts/Model4_Functions.R` (numbered as in the research questions
+below):
 
 | Outcome | Variable | Format |
 |----|----|----|
-| Outcome | Variable | Format | Section 15 `direction` |
-|----|----|----|----|
-| Outcome A1: Incident CDI cases | `cum_total_infected_incidence` | count per year | avoided |
-| Outcome A2: Missed CDI cases | `cum_total_missed_cases` | count per year | avoided |
-| Outcome A3: Incident CDI cases ever sent for testing | `prop_sent_for_testing` | proportion | change |
-| Outcome A4: CDI cases ever tested, point prevalence at model stabilisation | `prop_current_CDI_tested` | proportion | change |
-| Outcome A5: CDI cases confirmed | `cum_confirmed_cases` | count per year | additional |
-| Outcome A5: Proportion of CDI cases confirmed | `prop_confirmed` | proportion | change |
-| Outcome A6: CDI cases confirmed via retest (estimated) | `cum_confirmed_via_retest` | count per year | additional |
-| Outcome A6: Proportion confirmed via retest (estimated) | `prop_confirmed_via_retest` | proportion | change |
-| Outcome B1: Hospital-acquired colonisations | `cum_colonised_in_hospital` | count per year | avoided |
-| Outcome B2: Hospital-acquired CDI cases (estimated) | `cum_hospital_attributable_I` | count per year | avoided |
-| Outcome B3: Colonisation prevalence at discharge | `prop_discharged_C` | proportion | avoided |
-| Outcome B3: Discharge minus admission prevalence of colonisation | `diff_prev_C` | percentage points | avoided |
-| Outcome B3: CDI prevalence at discharge | `prop_discharged_CDI` | proportion | avoided |
-| Outcome B3: Discharge minus admission prevalence of CDI | `diff_prev_CDI` | percentage points | avoided |
-| Outcome C1: Total patient bed-days | `hospital_bed_days` | count per year | avoided |
-| Outcome C1: Average length of stay | `avg_LOS` | days | avoided |
-| Outcome C2: General ward patient bed-days | `general_ward_bed_days` | count per year | avoided |
-| Outcome C3: Side-room patient bed-days | `side_room_bed_days` | count per year | additional |
-| Outcome C4: Side-room share of patient bed-days | `prop_side_room_bed_days` | proportion | additional |
-| Outcome C5: Faecal specimens tested | `cum_total_test` | count per year | avoided |
-| Outcome C6: Faecal specimens tested per confirmed case | `tests_per_confirmed` | rate | avoided |
-| Outcome D1: CDI cases treated and recovered | `cum_recovered_cases` | count per year | additional |
-| Outcome D2: CDI cases discharged untreated | `cum_discharges_while_infected` | count per year | avoided |
-| Outcome D3: CDI cases died in hospital | `cum_deaths_post_infection` | count per year | avoided |
-| Outcome D4: CDI-attributable deaths in hospital | `cum_deaths_CDI_attributable` | count per year | avoided |
-| Outcome D5: Mean time from CDI symptom onset to first test, among cases tested | `mean_wait_test` | days | avoided |
-| Outcome D6: Mean time from CDI symptom onset to treatment, among cases treated | `mean_wait_treatment` | days | avoided |
-| Outcome E1: Actual CDI incidence per 10,000 patient bed-days | `rate_cdi_actual` | per 10,000 bed-days | avoided |
-| Outcome E1: Observed (detected) CDI incidence per 10,000 patient bed-days | `rate_cdi_observed` | per 10,000 bed-days | additional |
-| Outcome E2: Actual hospital-onset CDI incidence per 10,000 patient bed-days | `rate_ho_actual` | per 10,000 bed-days | avoided |
-| Outcome E2: Observed (detected) hospital-onset CDI incidence per 10,000 patient bed-days (estimated) | `rate_ho_observed` | per 10,000 bed-days | additional |
-| Outcome E3: Faecal specimens tested per 10,000 patient bed-days | `rate_tests` | per 10,000 bed-days | avoided |
+| Outcome | Variable | Format |
+| ---- | ---- | ---- |
+| Outcome A1: Incident CDI cases | `cum_total_infected_incidence` | count per year |
+| Outcome A2: Missed CDI cases | `cum_total_missed_cases` | count per year |
+| Outcome A3: Incident CDI cases ever sent for testing | `prop_sent_for_testing` | proportion |
+| Outcome A4: CDI cases ever tested, point prevalence at model stabilisation | `prop_current_CDI_tested` | proportion |
+| Outcome A5: CDI cases confirmed | `cum_confirmed_cases` | count per year |
+| Outcome A5: Proportion of CDI cases confirmed | `prop_confirmed` | proportion |
+| Outcome A6: CDI cases confirmed via retest (estimated) | `cum_confirmed_via_retest` | count per year |
+| Outcome A6: Proportion confirmed via retest (estimated) | `prop_confirmed_via_retest` | proportion |
+| Outcome B1: Hospital-acquired colonisations | `cum_colonised_in_hospital` | count per year |
+| Outcome B2: Hospital-acquired CDI cases (estimated) | `cum_hospital_attributable_I` | count per year |
+| Outcome B3: Colonisation prevalence at discharge | `prop_discharged_C` | proportion |
+| Outcome B3: Discharge minus admission prevalence of colonisation | `diff_prev_C` | percentage points |
+| Outcome B3: CDI prevalence at discharge | `prop_discharged_CDI` | proportion |
+| Outcome B3: Discharge minus admission prevalence of CDI | `diff_prev_CDI` | percentage points |
+| Outcome C1: Total patient bed-days | `hospital_bed_days` | count per year |
+| Outcome C1: Average length of stay | `avg_LOS` | days |
+| Outcome C2: General ward patient bed-days | `general_ward_bed_days` | count per year |
+| Outcome C3: Side-room patient bed-days | `side_room_bed_days` | count per year |
+| Outcome C4: Side-room share of patient bed-days | `prop_side_room_bed_days` | proportion |
+| Outcome C5: Faecal specimens tested | `cum_total_test` | count per year |
+| Outcome C6: Faecal specimens tested per confirmed case | `tests_per_confirmed` | rate |
+| Outcome D1: CDI cases treated and recovered | `cum_recovered_cases` | count per year |
+| Outcome D2: CDI cases discharged untreated | `cum_discharges_while_infected` | count per year |
+| Outcome D3: CDI cases died in hospital | `cum_deaths_post_infection` | count per year |
+| Outcome D4: CDI-attributable deaths in hospital | `cum_deaths_CDI_attributable` | count per year |
+| Outcome D5: Mean time from CDI symptom onset to first test, among cases tested | `mean_wait_test` | days |
+| Outcome D6: Mean time from CDI symptom onset to treatment, among cases treated | `mean_wait_treatment` | days |
+| Outcome E1: Actual CDI incidence per 10,000 patient bed-days | `rate_cdi_actual` | per 10,000 bed-days |
+| Outcome E1: Observed (detected) CDI incidence per 10,000 patient bed-days | `rate_cdi_observed` | per 10,000 bed-days |
+| Outcome E2: Actual hospital-onset CDI incidence per 10,000 patient bed-days | `rate_ho_actual` | per 10,000 bed-days |
+| Outcome E2: Observed (detected) hospital-onset CDI incidence per 10,000 patient bed-days (estimated) | `rate_ho_observed` | per 10,000 bed-days |
+| Outcome E3: Faecal specimens tested per 10,000 patient bed-days | `rate_tests` | per 10,000 bed-days |
 
 Section E outcomes are for comparison with surveillance data: observed
 rates count confirmed cases only, and observed hospital-onset CDI is
@@ -770,30 +783,30 @@ together against the daily probability of testing at 50%, 80% and 100%
 sensitivity (`plot_actual_vs_observed()`,
 `grid_actual_vs_observed_incidence.png`).
 
-Not plotted: colonisation and CDI prevalence at admission (Outcome B3; fixed
-inputs, the same in every scenario) and confirmed cases started on
-treatment (Outcome C7; equal to Outcome A5). Counts are annual totals over the analysis
-period after the burn-in (QMD Section 11); proportions, prevalence
-differences, length of stay and specimens per confirmed case are
-derived from them (`add_derived_outcomes()`), and mean times are exact
-steady-state values (`mean_wait_to_state()`). Differences
-in total CDI cases (Outcome A1) are driven entirely by differences in
-hospital-acquired CDI cases (Outcome B2), so their difference plots are
-identical: with fixed admissions, patients admitted with CDI and
-progressions among patients admitted colonised are the same in every
-scenario (testing and isolation act only on infected patients). The
-rates per 10,000 patient bed-days, side-room and missed proportions and
-missed cases by origin are only tabulated (`rate_spec`;
+Not plotted: colonisation and CDI prevalence at admission (Outcome B3;
+fixed inputs, the same in every scenario) and confirmed cases started on
+treatment (Outcome C7; equal to Outcome A5). Counts are annual totals
+over the analysis period after the burn-in (QMD Section 11);
+proportions, prevalence differences, length of stay and specimens per
+confirmed case are derived from them (`add_derived_outcomes()`), and
+mean times are exact steady-state values (`mean_wait_to_state()`).
+Differences in total CDI cases (Outcome A1) are driven entirely by
+differences in hospital-acquired CDI cases (Outcome B2), so their
+difference plots are identical: with fixed admissions, patients admitted
+with CDI and progressions among patients admitted colonised are the same
+in every scenario (testing and isolation act only on infected patients).
+The rates per 10,000 patient bed-days, side-room and missed proportions
+and missed cases by origin are only tabulated (`rate_spec`;
 `grid_rates.csv`). Hospital-onset CDI is all in-hospital C→I
 progressions (patients admitted colonised plus patients colonised in
 hospital); hospital-acquired CDI is the part attributed to
 hospital-acquired colonisation. Each outcome has its own tab with:
 
 - a line plot of the outcome against test sensitivity, one line for each
-  daily probability of testing of 0.00 (no testing), 0.02, 0.05, 0.10, 0.20
-  and 0.40 (`grid_line_sent` in `Scripts/Model4_Functions.R`; categorical
-  legend, no testing yellow to most testing purple), faceted by policy
-  with a shared y axis;
+  daily probability of testing of 0.00 (no testing), 0.02, 0.05, 0.10,
+  0.20 and 0.40 (`grid_line_sent` in `Scripts/Model4_Functions.R`;
+  categorical legend, no testing yellow to most testing purple), faceted
+  by policy with a shared y axis;
 - the same plot for the differences from P1 (P2 vs P1, P3 vs P1) at the
   same daily probability of testing and sensitivity, placed under P2 and
   P3 (the space under P1 is left empty); the y axis spans at least ±2%
@@ -802,15 +815,14 @@ hospital-acquired colonisation. Each outcome has its own tab with:
   the panel, and labels use as many decimal places as the breaks need;
 - heatmaps of test sensitivity (x) by daily probability of testing (y,
   one evenly spaced row per grid value, no testing at the bottom and the
-  most testing at the top; tiles with no
-  value, e.g. Outcome D5 and Outcome D6 with no testing, are grey), for every grid
-  value, in one figure: the outcome under
-  each policy on the top row (shared colour scale, yellow lowest, purple
-  highest), and the differences from P1 (P2 vs P1, P3 vs P1) on the
-  bottom row under P2 and P3, with the space under P1 left empty
-  (diverging scale centred on no difference: white = 0, orange lower
-  than P1, purple higher; symmetric, spanning at least the same ±2%
-  floor as the line plots).
+  most testing at the top; tiles with no value, e.g. Outcome D5 and
+  Outcome D6 with no testing, are grey), for every grid value, in one
+  figure: the outcome under each policy on the top row (shared colour
+  scale, yellow lowest, purple highest), and the differences from P1 (P2
+  vs P1, P3 vs P1) on the bottom row under P2 and P3, with the space
+  under P1 left empty (diverging scale centred on no difference: white =
+  0, orange lower than P1, purple higher; symmetric, spanning at least
+  the same ±2% floor as the line plots).
 
 The incremental effect of also isolating suspected cases (P3 vs P2) is
 saved in `grid_key_outcome_differences.csv`. Each panel has its own y
@@ -836,44 +848,43 @@ in `sensitivity_gain_spec`:
 
 - `"avoided"`: value at `sens_from` minus value at `sens_to`, so a
   negative value is an increase;
-- `"additional"` (outcomes that rise as more cases are confirmed):
-  value at `sens_to` minus value at `sens_from`;
+- `"additional"` (outcomes that rise as more cases are confirmed): value
+  at `sens_to` minus value at `sens_from`;
 - `"change"` (the shares of cases tested and confirmed): value at
   `sens_to` minus value at `sens_from`, in percentage points.
 
 The arc elasticity of each outcome with respect to sensitivity uses the
-midpoint method, `(ΔY / midpoint Y) / (ΔS / midpoint S)`: the % change in
-the outcome for a 1% change in sensitivity, from the actual change in
+midpoint method, `(ΔY / midpoint Y) / (ΔS / midpoint S)`: the % change
+in the outcome for a 1% change in sensitivity, from the actual change in
 the outcome (negative = falls as sensitivity rises). It is NA where the
-outcome's midpoint is 0 and for the differences in prevalence
-(Outcome B3), and is saved as `elasticity` in
+outcome's midpoint is 0 and for the differences in prevalence (Outcome
+B3), and is saved as `elasticity` in
 `sensitivity_gain_<from>_to_<to>.csv` (`make_sensitivity_gain()`).
 Section 17 compares the elasticities of all outcomes in one chart,
 `plot_elasticities()`: outcomes in label order (Outcome A1 at the top),
-one panel per daily probability of testing in `gain_table_sent`, a
-point per policy (`policy_colours`), reference lines at 0 and ±1
-(response in proportion to sensitivity) and solid lines between the
-outcome groups A–D. Outcomes with no elasticity (the Outcome B3 differences in
+one panel per daily probability of testing in `gain_table_sent`, a point
+per policy (`policy_colours`), reference lines at 0 and ±1 (response in
+proportion to sensitivity) and solid lines between the outcome groups
+A–D. Outcomes with no elasticity (the Outcome B3 differences in
 prevalence) are left out. Section 18 gives the commentary, grouping
 outcomes by how strongly they respond.
 
 Counts are per year; proportions and rates are over the analysis period.
 Each outcome has a tab with a table of the values at `sens_from` and
-`sens_to`, the change and the arc elasticity, by policy (rows ordered
-by policy, then daily probability of testing of 0.03 and 0.40;
+`sens_to`, the change and the arc elasticity, by policy (rows ordered by
+policy, then daily probability of testing of 0.03 and 0.40;
 `gain_table_sent`, set in Section 12) and a chart,
 `plot_sensitivity_levels()`, of the outcome itself over every daily
 probability of testing in the grid: `sens_from` dashed and `sens_to`
 solid, one panel per policy with a fixed y axis, the gap between them
-shaded and a dotted line for no testing. The x axis is
-`prob_test_daily` on a log scale from 0.01 (`sent_log_trans`; testing
-increases left to right; no testing is the dotted horizontal line). The
-testing outputs (shares of incident and prevalent cases ever tested,
-mean times to first test and to treatment) are outputs, so they are
-plotted as outcomes in their own Section 12 tabs rather than added to
-this axis; the section also repeats the Section 13 table of testing
-outputs. `sens_from` and `sens_to` must both be values
-in the grid.
+shaded and a dotted line for no testing. The x axis is `prob_test_daily`
+on a log scale from 0.01 (`sent_log_trans`; testing increases left to
+right; no testing is the dotted horizontal line). The testing outputs
+(shares of incident and prevalent cases ever tested, mean times to first
+test and to treatment) are outputs, so they are plotted as outcomes in
+their own Section 12 tabs rather than added to this axis; the section
+also repeats the Section 13 table of testing outputs. `sens_from` and
+`sens_to` must both be values in the grid.
 
 ------------------------------------------------------------------------
 
@@ -892,17 +903,17 @@ Implemented safeguards include:
 
 Set out in Section 1 h) of `Model4_Run.qmd`:
 
-- **Specimen collection and start of treatment while awaiting
-  transfer (P2, P3):** count the test on entry to T3 and start
-  treatment on entry to T1, with the mean time in Xtest shortened to
+- **Specimen collection and start of treatment while awaiting transfer
+  (P2, P3):** count the test on entry to T3 and start treatment on entry
+  to T1, with the mean time in Xtest shortened to
   `t_test_turnaround - t_patient_transfer` and in Xtreat to
   `t_treatment - t_patient_transfer`, so transfer no longer delays
   testing or treatment.
 - **Environmental contamination that varies with prevalence:** a spore
   stock state `Env`, filled in proportion to bed-days in each infectious
-  state (lower for C, Xtreat and isolated patients) and emptied at
-  1 / persistence time (e.g. 180 days), with `beta0 = beta_env × Env`.
-  Links environmental exposure to prevalence (with a lag), but hard to
+  state (lower for C, Xtreat and isolated patients) and emptied at 1 /
+  persistence time (e.g. 180 days), with `beta0 = beta_env × Env`. Links
+  environmental exposure to prevalence (with a lag), but hard to
   parameterise.
 - Others: testing of non-CDI diarrhoea and colonised patients (with
   specificity), limited side-room capacity, recurrence and readmission,
@@ -947,75 +958,80 @@ b)  hospital-acquired CDI is estimated by apportioning the flow from C
 
 ### Outcomes of interest
 
-Each outcome is evaluated across the full range of the control
-variables (plots in QMD Section 12), and compared for an improvement in
-test sensitivity from 50% to 80% for P1, P2 and P3 (plots across the
-daily probability of testing, and tables at 0.03 and 0.40, in Section 15).
+Each outcome is evaluated across the full range of the control variables
+(plots in QMD Section 12), and compared for an improvement in test
+sensitivity from 50% to 80% for P1, P2 and P3 (plots across the daily
+probability of testing, and tables at 0.03 and 0.40, in Section 15).
 
 **A) Case ascertainment**
 
-- Outcome A1: the total number of incident CDI cases (patients colonised on
-  admission who progress to CDI during their stay, patients admitted
+- Outcome A1: the total number of incident CDI cases (patients colonised
+  on admission who progress to CDI during their stay, patients admitted
   with CDI and patients colonised in hospital who progress to CDI);
-- Outcome A2: the number of missed CDI cases, untested or after a false negative
-  result, discharged or dying;
-- Outcome A3: the proportion of incident CDI cases that are ever sent for
-  testing;
-- Outcome A4: the proportion of CDI cases in hospital that have ever been tested
-  for CDI, as a point prevalence at model stabilisation (for comparison
-  with point-prevalence studies such as Mawer et al. 2019);
-- Outcome A5: the number and proportion of incident CDI cases that are confirmed
-  through diagnostic testing;
-- Outcome A6: the estimated number and proportion of incident CDI cases that are
-  confirmed through re-testing following a false-negative test result
-  (delayed diagnosis).
+- Outcome A2: the number of missed CDI cases, untested or after a false
+  negative result, discharged or dying;
+- Outcome A3: the proportion of incident CDI cases that are ever sent
+  for testing;
+- Outcome A4: the proportion of CDI cases in hospital that have ever
+  been tested for CDI, as a point prevalence at model stabilisation (for
+  comparison with point-prevalence studies such as Mawer et al. 2019);
+- Outcome A5: the number and proportion of incident CDI cases that are
+  confirmed through diagnostic testing;
+- Outcome A6: the estimated number and proportion of incident CDI cases
+  that are confirmed through re-testing following a false-negative test
+  result (delayed diagnosis).
 
 **B) Transmission of *C. difficile***
 
 - Outcome B1: the number of hospital-acquired colonisations;
-- Outcome B2: the estimated number of hospital-acquired infections (patients
-  colonised in hospital who progress to CDI during their stay);
-- Outcome B3: the prevalence of colonisation and infection amongst discharged
-  patients, and its difference from the prevalence amongst admitted
-  patients.
+- Outcome B2: the estimated number of hospital-acquired infections
+  (patients colonised in hospital who progress to CDI during their
+  stay);
+- Outcome B3: the prevalence of colonisation and infection amongst
+  discharged patients, and its difference from the prevalence amongst
+  admitted patients.
 
 **C) Hospital resource use**
 
-- Outcome C1: total hospital bed occupancy (patient bed-days) and average
-  patient length of stay;
+- Outcome C1: total hospital bed occupancy (patient bed-days) and
+  average patient length of stay;
 - Outcome C2: general ward bed occupancy;
 - Outcome C3: required side-room bed occupancy;
-- Outcome C4: the proportion of hospital bed occupancy that is required for
-  patient isolation in a side room;
-- Outcome C5: the number of faecal specimens collected and tested for CDI;
-- Outcome C6: the number of faecal specimens tested per CDI case confirmed;
-- Outcome C7: the number of confirmed cases that are started on treatment (equal
-  to Outcome A5).
+- Outcome C4: the proportion of hospital bed occupancy that is required
+  for patient isolation in a side room;
+- Outcome C5: the number of faecal specimens collected and tested for
+  CDI;
+- Outcome C6: the number of faecal specimens tested per CDI case
+  confirmed;
+- Outcome C7: the number of confirmed cases that are started on
+  treatment (equal to Outcome A5).
 
 **D) CDI case outcomes**
 
-- Outcome D1: the number of incident CDI cases that are treated and recover
-  (then either returned to a general ward or discharged);
-- Outcome D2: the number of incident CDI cases that are discharged untreated;
-- Outcome D3: the number of incident CDI cases that die in hospital (with no
-  specimen sent for testing, awaiting a test result, awaiting re-testing
-  following a false negative test result, or during treatment);
-- Outcome D4: the number of CDI-attributable deaths in hospital (accounting for
-  deaths that may have occurred due to other causes);
-- Outcome D5: the mean time from CDI symptom onset to first test, among the
-  cases tested;
-- Outcome D6: the mean time from CDI symptom onset to the start of treatment,
-  among the cases treated.
+- Outcome D1: the number of incident CDI cases that are treated and
+  recover (then either returned to a general ward or discharged);
+- Outcome D2: the number of incident CDI cases that are discharged
+  untreated;
+- Outcome D3: the number of incident CDI cases that die in hospital
+  (with no specimen sent for testing, awaiting a test result, awaiting
+  re-testing following a false negative test result, or during
+  treatment);
+- Outcome D4: the number of CDI-attributable deaths in hospital
+  (accounting for deaths that may have occurred due to other causes);
+- Outcome D5: the mean time from CDI symptom onset to first test, among
+  the cases tested;
+- Outcome D6: the mean time from CDI symptom onset to the start of
+  treatment, among the cases treated.
 
 **E) Comparison with surveillance data:**
 
 - Outcome E1: actual and observed (detected) CDI incidence per 10,000
   patient bed-days;
-- Outcome E2: actual and observed (detected) hospital-onset CDI incidence
-  per 10,000 patient bed-days (observed estimated from confirmed cases ×
-  the hospital-onset share of incident cases; surveillance classifies
-  cases by specimen date relative to admission, so the definitions
-  differ);
+- Outcome E2: actual and observed (detected) hospital-onset CDI
+  incidence per 10,000 patient bed-days (observed estimated from
+  confirmed cases × the hospital-onset share of incident cases;
+  surveillance classifies cases by specimen date relative to admission,
+  so the definitions differ);
 - Outcome E3: faecal specimens tested per 10,000 patient bed-days.
 
 ### Cost effectiveness analysis
@@ -1110,9 +1126,9 @@ hospital-acquired CDI cases (estimated).
 
 **Notes**
 
-The proportions confirmed (Outcome A5) and missed (Outcome A2) do not sum to 1: the gap
-is mainly deaths while awaiting a test result (in **Xtest**: tested, but
-neither confirmed nor missed).
+The proportions confirmed (Outcome A5) and missed (Outcome A2) do not
+sum to 1: the gap is mainly deaths while awaiting a test result (in
+**Xtest**: tested, but neither confirmed nor missed).
 
 ^i^ `cum_confirmed_via_retest` is estimated post-hoc by apportioning
 `cum_confirmed_cases` in proportion to the share of all tests that were
@@ -1178,8 +1194,8 @@ All scenarios in the grid:
 - `testing_outputs.csv` (Section 13: for each daily probability of
   testing, the mean time to testing if not discharged or dead first in
   days, the actual mean time to testing among cases tested in days, the
-  share of incident CDI cases sent for testing and the point-prevalence share ever tested (Outcome A4) by policy, at
-  one test sensitivity)
+  share of incident CDI cases sent for testing and the point-prevalence
+  share ever tested (Outcome A4) by policy, at one test sensitivity)
 - `grid_lines_<outcome>.png`, `grid_lines_diff_<outcome>.png` and
   `grid_heatmap_<outcome>.png` (heatmaps and difference heatmaps in one
   figure; one set per Section 12 outcome)
@@ -1210,8 +1226,8 @@ Example scenarios only:
   retest), `plot_missed_cases_bar.png` (untested and false negatives)
   and `plot_case_outcomes_bar.png` (discharged untreated: untested from
   I and false negatives from FN; recovered after treatment; died
-  following CDI), `plot_bed_days_bar.png` (patient bed-days per year
-  in general ward beds and in side rooms) and
+  following CDI), `plot_bed_days_bar.png` (patient bed-days per year in
+  general ward beds and in side rooms) and
   `plot_cdi_patient_days_bar.png` (CDI patient-days per year by state —
   I, Xtest, FN, Xtreat, T1, T3, T4 — and location: general ward lighter
   shade, side room full colour; `plot_cdi_patient_days_bar()`)
